@@ -1,0 +1,397 @@
+
+20221102
+1.扩展   TestKuozhan 、 shell/sql  规则引擎/模板引擎、\ starter（包-组件-starter--协作-tax-common如何deploy,引用） \ spi    +  +  、
+2.转换   TestMapping + https://cloud.tencent.com/developer/article/1765543
+3.定位   匹配  https://cloud.tencent.com/developer/article/1840092  - map -   https://cloud.tencent.com/developer/article/1840091  + SPEL（xx---yonyou注解实现）
+              xpath
+4.格式化   https://cloud.tencent.com/developer/article/1771077
+
+
+基石
+1.
+<!--项目依赖组织-->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>**/*.properties</include>
+          <include>**/*.yml</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/java</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>**/*.properties</include>
+          <include>**/*.yml</include>
+        </includes>
+        <excludes>
+          <exclude>**/*.java</exclude>
+          <exclude>**/*.class</exclude>
+        </excludes>
+      </resource>
+    </resources>
+
+
+
+=============== meta ===============
+
+1.SQL
+2.Spring
+3.
+
+
+
+============== 整理 ==================
+
+
+
+“驯服”业务流程：盘点业务开发中的常见流程模式
+
+引言
+对于程序员而言，要成为中高级工程师，需要趟过的第一关是：驯服业务逻辑流。“驯服”逻辑流，是指按照正确的顺序执行指令，实现流程闭环。
+
+在 “软件开发中的存储设计基础” 一文中，阐述了软件开发所必备的存储设计基础。
+
+对于一个功能需求来说，往往存储设计完成之后，随后就是业务流程设计。业务流程设计应该是开发人员接触最多的了。大部分代码修改都是针对业务流程的。要设计好的业务流程，熟悉常用业务流程模式及常见问题求解，则可大幅提升流程设计的开发实现效率。
+
+本文盘点下常用的业务流程模式。
+
+
+基本概念
+实体
+
+指令： 做一件原子不可分的事情。下简称 I。
+执行单元：执行指令的运行时实体，或者说指令在其中运行的上下文语境。一般指进程或线程。 下简称 EU。
+秩序： 多个指令或流程的执行依赖关系或执行依赖关系的组合。含有递归结构。下简称 O。
+流程： 某个秩序确定的多个指令或流程的执行。含有递归结构。下简称 F。
+
+执行依赖关系
+
+顺序： 指令 IA 执行完成后才能执行指令 IB。
+条件： 依赖 IA 的真假输出，决定执行下一个指令 IN。
+循环： 依赖 IA 的真输出，反复执行 IB，直到 IA 的输出为假。
+
+流程秩序结构
+
+串行：在单个 EU 里，FB 必须在 FA 执行完成后执行。同顺序关系。
+并发： 不同 EU 的 F 可以并行执行或并发执行。并行执行，比如边烧水边跳舞；并发执行，是指在一段时间内交替做不同的事情，比如 CPU 可以并发执行编辑软件和影视软件（对于单核处理器，实际上是交替执行）。
+异步： EU A 提交流程 Fa 给 EU B 去执行，而EU A 可以紧接着 Fb。Fa 和 Fb 是并发的。异步可以衍生出回调的概念。回调是指待 EU B 完成流程 Fb 后，通知 EU A 去执行 fc。
+
+串行流程
+串行流程，就是按秩序先后一个指令一个指令执行。看上去简单，实则并没有看上去那么简单。但它是最基础的流程。
+
+串行流程有五种基本模式：顺序、异常、回调、回滚、重复。
+
+
+顺序
+
+顺序串行流程是最基本的最容易理解和排查的。大多数业务流程实际上都是串行的顺序流程。
+
+
+异常
+
+异常的形式是 F = Ex(param, ei, Ei)，ei 是异常码，Ei 是异常处理函数。在执行流程 F 时，如果执行结果为 ei，则执行异常处理函数 Ei。 是在执行串行顺序流程中遇到错误后跳转到另一个流程去处理。异常是一种条件执行依赖关系的处理，但顺序依然是串行的。
+
+
+回调gg
+
+回调的形式是 F = call(param, C)。 在执行顺序流程 F 时，在其中某一步，需要根据传入的不同的回调函数 C 来执行不同的流程。实际上，异常处理可以通过回调来实现。异常处理函数作为回调函数 C 传入即可。
+
+
+回滚
+
+回滚的形式是 F = call(param, S)，S 是保存点函数。在执行顺序流程 F 时，在其中某一步遇到了错误，返回到保存点函数 S 处，执行保存点函数。下一次执行 F 时，从 S 确定的保存点处重续执行。
+
+
+重复
+
+重复的形式是 F = call(param, C, L)，C 是条件函数， L 是循环函数。在执行顺序流程 F 时，检查条件函数 C 的输出是否为真。如果为真，则执行循环函数 L；如果为假，则退出流程。执行 L 之后，再次检查 C 的输出是否为真，决定是否执行 L 或退出。
+
+
+基本流程模式
+大多数业务流程都是基本流程模式的组合。而基本流程模式通常是由串行流程的五种模式组合而成。
+
+
+单纯查询型
+
+最基本的流程就是查询或统计指定条件的数据。
+
+设计：建立合适的查询条件及合适的索引。
+应用：分页查询或统计查询。
+
+单纯操作型
+
+某个实体数据的保存、更新或删除。
+
+设计： 可返回操作后的实体 ID，供随后使用。
+应用：编辑、保存或删除配置项。
+
+命令发送型
+
+EU 发送一个指令给一个外部功能提供者。如果是同步的，那么会根据命令执行的返回结果进行后续流程；如果是异步的，则可能更新自身的状态，然后退出。
+
+设计： 状态设计需要有进行中、完成、失败；需要区分发送指令失败和发送成功但执行失败的两种失败情形；可考虑封装成命令模式。
+应用： 与外部接口通信。
+
+表查询型
+
+若干流程（对应实现某个功能或服务）注册在一个含有 key-value 键值的表格 T = T(key, F) 里， EU 通过 key 来查找对应的流程 F 。
+
+设计： 功能注册机制。
+应用：中断处理；异常处理。
+
+一致读写型
+
+在两个或多个数据源之间进行同步读写。
+
+查询： 先查缓存，缓存命中则直接返回；缓存未命中则查询数据库。
+
+更新： 先写数据到数据库，再同步到缓存。
+
+应用：缓存读写。
+
+
+异步任务型
+
+提交一个任务到 EU 池，EU 池起一个 EU 执行任务。 常用于耗时长的后台任务。
+
+设计：需要做好异步的衔接和流程的闭环。
+应用：导出任务；扫描任务；高并发场景，可使用异步任务型流程，先写到缓存，再异步同步到数据库。
+
+异步回调型
+
+提交一个任务到 EU 池，EU 池起一个 EU 执行任务。任务完成后，通知某个 EU 执行指定回调任务。
+
+设计：避免嵌套回调层次过多，建议不超过两层。
+应用：文件上传回调； RPC 调用回调。
+
+批量型
+
+将一个数据集分解成 N 个批次，每个批次包含一个子数据集。每批次处理一个子数据集。各批次之间是串行的，在一个 EU 里执行。批量处理的用途在于：1. 若必要，可先展示部分数据结果；2. 避免一次性加载大量数据到内存里导致系统崩溃。
+
+设计： 每批量的子数据集大小要仔细确定，兼顾性能和内存占用开销；可添加处理进度展示。
+应用：大数据量的计算与汇总。
+
+流处理型
+从一个数据流中获取一个或多个数据，执行某个流程； 遍历一个数据流，执行一系列转换或聚合操作。
+
+设计： 可持续运行，数据集无长度限制。
+应用： 数据上报消费。
+
+并发汇总型
+
+将一个数据集分解为 N 个子数据集。针对每一个子数据集，起一个 EU 去执行查询或操作。各个 EU 的执行是并发的互不影响的。最后汇总所有执行单元的执行结果（可选）。并发的用途在于利用多核的力量提升性能。在部分场景下，并发具备很好的设计清晰性，容易理解流程。并发和批量可以结合使用。
+
+设计：获取执行结果时要加超时；异常捕获要做好。
+应用：Map-Reduce ； 获取大量业务对象的详情。
+
+加锁型
+
+申请锁成功，执行流程，然后释放锁。
+
+
+增量型
+
+将新旧数据做比对，新的保存，已有的更新。
+
+设计：通常会采用数据版本号机制。
+应用：重复性高的大数据量的处理和保存。
+
+定时任务型
+
+起一个定时任务，指定时间或者指定周期去执行。
+
+设计：频率及周期要确定好，确保一次执行的任务能够在指定时间间隔内完成。
+应用：定时清理失效数据。
+
+流水线型
+
+有 N 个工序，每个工序执行完成后，修改状态，然后交由下一个工序执行。直到所有工序都执行完成。典型的流水线实现是 PipeLine 模式。
+
+设计： 工序之间的数据交换格式要设计好。
+应用： web 请求处理。
+
+轮询型
+
+每隔一段时间执行一次查询操作，直到满足指定要求为止。
+
+设计： 设置好退出条件，避免死循环。
+应用： CAS 锁操作。
+
+重试型
+
+重试执行一个任务 N 次，直到执行成功，或者达到指定上限次数为止。
+
+设计： 设置好重试次数和重试间隔；设置失败达到上限次数的兜底流程。
+应用： API 查询接口调用重试。
+
+重续型
+
+从上次执行的保存点开始执行。保存点可以是偏移量，也可以是事务的保存点。
+
+设计：偏移量或保存点的选取。
+应用：事务；断点续传。
+
+过滤型
+
+判断请求是否符合某个条件。若符合，则忽略。
+
+去重型
+
+判断请求是否已处理过。若已处理，则忽略。
+
+消息通知型
+
+EU A 发送一个消息给 消息队列 Q， EU B 从消息队列 Q 中接收到这个消息去执行 F。
+
+设计：消息格式要定义好，兼顾通用性、可靠性；避免一次性传输大量数据。
+应用：事件驱动型；消息解耦。
+
+Producer-Consumer型
+
+N 个 PEU 生成任务添加到一个队列 Q，M 个 CEU 从队列 Q 中取出任务执行。
+
+设计：队列大小。
+应用： 任务协作。
+
+常见业务流程模式
+查询拼接型
+
+常见的查询接口，就是将多个单纯查询型流程串行组合起来，拼接出最终的数据返回给前端。
+
+设计： 考虑性能和内存开销。
+应用：分页功能（分页查询 + 计数查询）。
+
+CRUD型
+
+大部分业务流程，基本都是保存、更新、查询、删除流程的串行组合，即单纯查询型和单纯保存型的串行组合。即 CRUD 型流程。
+
+要做好 CRUD 型的流程，关键在于存储设计的质量。
+
+设计：考虑闭环和严谨性。
+应用：大部分业务流程。
+
+任务型
+
+创建一个任务，设置状态，然后在流程中追踪这个任务的执行和完成。
+
+
+切面型
+
+定义一个切面条件及切面流程。当执行满足该条件时，进入该切面流程。
+
+设计： 兼顾通用和灵活。
+应用：拦截器；日志审计。
+
+模板型
+
+定义一个流程模板，模板的某些点可以根据不同场景进入不同的指定流程。
+
+设计： 模板参数和模板流程要将通用的部分提取出来，尽可能少的包含差异部分。
+应用： 不同任务或应用的生命周期管理；相似业务的通用流程。
+
+常见业务问题
+一致性问题
+
+当业务流程涉及两个子系统的不同数据源，且这些数据源的数据存在一定关联时，就会存在数据的一致性问题。
+
+一致性问题的求解比较复杂，需要具体问题具体分析。对于单库操作，可以通过事务和回滚机制来保证；对于跨库操作，考虑消息补偿机制，或者达成最终一致性。还可以采用对账补偿的方式来兜底。
+
+
+依赖变更问题
+
+当某个业务依赖一个基础数据，而这个数据会发生变化时，就会产生依赖变更问题。
+
+依赖变更的求解，通常基于观察者模式，运用基于消息推送的事件驱动机制来实现。如果开销比较小，也可以基于轮询机制来求解。
+
+
+流程闭环问题
+
+当流程中的某个操作失败后，就会导致整体流程无法完成，停滞在某个点上，无法闭环。
+
+闭环的解决思路：
+
+直接失败。对于不能重试（可能导致资损）的情形，直接失败是最简单有效的办法。
+重试、设置最大失败次数。对于可重试场景，可间隔一段时间重试一次，达到最大失败次数则设置为终态失败。
+保存点。设置保存点，失败之后可以从保存点重续执行，最终达到终态成功。
+
+业务流程不是一成不变的
+大多数开发人员都会认为业务流程非常重要。在我看来，存储设计才至关重要。因为存储设计是基础的相对稳定的，而业务流程往往会因为各种需求的变更或者性能优化而发生变化。业务流程往往不是一成不变的。
+
+在充分理解和夯实了存储基础之后，业务流程是可以灵活加以改造，来适应不同的需求。
+
+
+
+   /**--------------------反射+泛型---------------------------------------**/
+        public void testGenericAndRef() throws NoSuchFieldException {
+
+            //------ParimeterizedType   list<T>
+            Student1 student1 = new Student1() ;
+            Field courses = student1.getClass().getDeclaredField("courses");
+            Type genericType = courses.getGenericType(); //generic 通用 - 泛
+            System.out.println(genericType.getTypeName()); //java.util.ArrayList<java.lang.String>
+            if(genericType instanceof ParameterizedType){ //ParameterizedType 就是 List<String>
+               //  (ParameterizedType)genericType  -- 强转     raw 原
+                System.out.println(ParameterizedType.class.cast(genericType).getRawType());   //class java.util.ArrayList
+                System.out.println(ParameterizedType.class.cast(genericType).getActualTypeArguments()[0]); //class java.lang.String
+
+
+            //------genericArrayType  T[]
+                Field tt = student1.getClass().getDeclaredField("tt");
+                Type genericType1 = tt.getGenericType();
+                String typeName = genericType1.getTypeName();
+                System.out.println(typeName);              //T[]
+                if(genericType1 instanceof GenericArrayType){
+                    System.out.println(((GenericArrayType) genericType1).getGenericComponentType().getTypeName());// T
+                }
+srping
+            //------TypeVariable   T extends Map
+                Field ll = student1.getClass().getDeclaredField("ll");
+                Type genericType2 = ll.getGenericType();
+                //TypeVariable tv = (TypeVariable)genericType2; 先获取到param..Type ,在获取参数
+                ParameterizedType pt  = (ParameterizedType)genericType2;
+                Type[] types=pt.getActualTypeArguments();
+                TypeVariable typeVariable=(TypeVariable)types[0];
+                Type[] types2=typeVariable.getBounds();
+                for(Type type : types2){
+                    System.out.print(type + " ");
+                }
+
+            //------WildcardType  ? extends Number / ? super Integer
+
+            }
+        }
+
+
+
+https://www.yuque.com/asamiya/xdk2lb/ot7rhr   分层
+https://www.yuque.com/asamiya/xdk2lb/bk5ao1  初始化
+https://www.yuque.com/asamiya/xdk2lb/btxxuq 解耦
+spring ?  关联
+https://www.yuque.com/asamiya/xdk2lb/cu1pk9 扩展
+https://www.yuque.com/asamiya/xdk2lb/sv2pgh 复用
+https://www.yuque.com/asamiya/xdk2lb/nx9vtb 健壮
+https://www.yuque.com/asamiya/xdk2lb/ivpsp8 维度
+https://www.yuque.com/asamiya/xdk2lb/ymbsxg 规范
+https://www.yuque.com/asamiya/xdk2lb/gnb60i 反射
+         元数据设计： 设计 、 合规方案、 查询方案 、  其他框架设计
+程序处理：
+初始化 https://www.yuque.com/asamiya/xdk2lb/bk5ao1
+拦截器：aspectj   \ 切面 、 handler \ ...
+
+流程：
+	分支
+	控制
+	边界
+定位： https://www.yuque.com/asamiya/xdk2lb/sg588u
+获取：
+状态：
+一致性：
+
+
+
+
+
+
