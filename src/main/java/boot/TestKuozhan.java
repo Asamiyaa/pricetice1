@@ -2,6 +2,7 @@ package boot;
 
 import com.ql.util.express.DefaultContext;
 import com.ql.util.express.ExpressRunner;
+import com.starter.MyStarterConfig;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -145,16 +146,60 @@ import org.springframework.test.context.junit4.SpringRunner;
 }
 
 /**
+ * 项目间http/feign 指的是都是大型项目、模块间调用
+ * jar包则是简单的实现，起始就是starter     jar  vs  stater
+ * manager  每个项目都要写重复的或者需要配置
+ *
+ *
+ * SpringBoot starter
+ * SpringBoot中的starter是一种非常重要的机制，能够抛弃以前繁杂的配置，将其统一集成进starter，应用者只需要在maven中引入starter依赖，SpringBoot就能自动扫描到要加载的信息并启动相应的默认配置。starter让我们摆脱了各种依赖库的处理，需要配置各种信息的困扰。SpringBoot会自动通过classpath路径下的类发现需要的Bean，并注册进IOC容器。SpringBoot提供了针对日常企业应用研发各种场景的spring-boot-starter依赖模块。所有这些依赖模块都遵循着约定成俗的默认配置，并允许我们调整这些配置，即遵循“约定大于配置”的理念。
+ * 自定义starter
+ * 日常工作中有时有一些独立于业务之外的功能或模块，可能这个项目在用，另一个项目也要用，如果每次都重新集成的话就会很麻烦，这时我们只要把这些功能或模块封装成一个个starter的话，在使用的时候引入进去就很方便了。
+ *
+ *
+ * 步骤:其实自定义starter很简单，大致需要以下5步：
+ *
+ * 新建两个模块，命名规范：
+       * springboot自带的starter命名规范为spring-boot-starter-xxx，
+       * 自定义的starter命名规范为xxx-spring-boot-starter
+       *
+       * ● xxx-spring-boot-autoconfigure：自动配置核心代码
+       * ● xxx-spring-boot-starter：管理依赖
+       * 如果不需要将自动配置代码和依赖项管理分离开来，则可以将它们组合到一个模块中。只不过springboot官方建议将两个模块分开。
+       * 2. 引入spring-boot-autoconfigure依赖
+       * 3. 创建自定义的XXXProperties 类: 这个类的属性根据需要是要出现在配置文件中的。
+       * 4. 创建自定义的XXXAutoConfiguration类：这个类要配置自动配置时的一些逻辑，同时也要让XXXProperties 类生效。
+       * 5. 创建自定义的spring.factories文件：在resources/META-INF创建一个spring.factories文件和spring-configuration-metadata.json，spring-configuration-metadata.json文件是用于在填写配置文件时的智能提示，可要可不要，有的话提示起来更友好。spring.factories用于导入自动配置类，必须要有
+ *
+ *        注意这里的   spring.factories  文件   写的包路径
+       *
  * 自定义starter
  */
 @Component
 @Order(15)
 class MyStarter implements ApplicationRunner{
 
-//  @XxlJob("myStarter")
+  /**
+   * 这个starter组件用来读取 properties文件
+   */
+  @Autowired
+  private MyStarterConfig myStarterConfig;
+
   public void test(){
-    System.out.println("-----------");
+    System.out.println("------->>>>starter----"+myStarterConfig.getName());
   }
+
+
+  /**
+   *  注入 复杂的 模块逻辑    xxlJob 将xxljob的配置逻辑 + 配置文件封装到对用 ， 类似我们每个组件 的 RedisAutoConfiguration RedisTemplate 或者 RabbitTemplatge
+   *                         这些第三方组件都已经帮完成了， springboot将这种自定义starter能力重要性提高了。这些第三方我们也可以自己重载在其基础上添加功能
+   *  完成两步 ： 0.依赖 spring-boot-autoconfigure 的能力
+   *             1.读取配置
+   *             2.判断是否注入spring  ConditionalOnMissingBean
+   *             3.注入 @Bean 或者 @import + new    + META-INF下spring.factory文件
+   *             4.代码中调用
+   */
+
 
   @Override
   public void run(ApplicationArguments args) throws Exception {

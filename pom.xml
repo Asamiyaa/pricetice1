@@ -343,12 +343,12 @@
       <version>1.7</version>
     </dependency>
 
-    <!--自定义starter-->
-    <!--    <dependency>-->
-    <!--      <groupId>org.ywj</groupId>-->
-    <!--      <artifactId>priceticeJarStarter</artifactId>-->
-    <!--      <version>1.0-SNAPSHOT</version>-->
-    <!--    </dependency>-->
+<!--    自定义starter-->
+        <dependency>
+          <groupId>com.asamiya</groupId>
+          <artifactId>jarStarter</artifactId>
+          <version>1.0-SNAPSHOT</version>
+        </dependency>
 
   </dependencies>
 
