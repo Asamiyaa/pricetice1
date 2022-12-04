@@ -200,6 +200,11 @@ class MyStarter implements ApplicationRunner{
    *             4.代码中调用
    */
 
+  /**
+   * springboot-starter中的SPI 机制   https://juejin.cn/post/6844903890173837326
+   *   1.框架定义好接口 扩展解耦实现  比如插件、...  2.通过文件名字、字符串、反射load
+   */
+
 
   @Override
   public void run(ApplicationArguments args) throws Exception {
