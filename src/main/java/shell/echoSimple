@@ -1,0 +1,8 @@
+#!/bin/bash
+
+echo aaaaaaaaaaaaaaaaaaa;
+touch GGG.txt;
+
+
+
+#开启定时任务，清理文件

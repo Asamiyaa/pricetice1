@@ -1,0 +1,32 @@
+--
+-- DROP TABLE IF EXISTS inv_apply;
+-- CREATE TABLE inv_apply  (
+--   id  int not null primary key auto_increment,
+--   fpqqlsh varchar(20),
+--   einvoice_code varchar(8),
+--   einvoice_number varchar(10),
+--   random_number varchar(6),
+--   total_amount decimal(17, 2) ,
+--   issue_date date ,
+--   payer_party_name varchar(100) ,
+--   remark varchar(200) ,
+--   handling_person varchar(20),
+--   status_code int(5) ,
+--   create_time date
+-- );
+-- ----------------------------
+-- -- Table structure for inv_apply_b
+-- -- ----------------------------
+-- DROP TABLE IF EXISTS inv_apply_b;
+-- CREATE TABLE inv_apply_b  (
+--   id int not null primary key auto_increment,
+--   hid bigint(20),
+--   item_code varchar(30) ,
+--   item_name varchar(100),
+--   item_amount decimal(17, 2),
+--   item_unit varchar(30) ,
+--   item_quantity int(11) ,
+--   item_std decimal(17, 2),
+--   create_time date,
+--   ts date
+-- )
