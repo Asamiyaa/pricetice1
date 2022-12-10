@@ -1,10 +1,13 @@
 
 20221102
 1.扩展   TestKuozhan 、 shell/sql  规则引擎/模板引擎、\ starter（包-组件-starter--协作-tax-common如何deploy,引用） \ spi    +  +  、
-2.转换   TestMapping + https://cloud.tencent.com/developer/article/1765543  IConvert...spring中借鉴 / yy中的json转换-bean之间转换 /填充数据转换  定义接口 / bean定义接口来规范set /get方法 default
+2.转换 + 格式化   TestMapping + https://cloud.tencent.com/developer/article/1765543  IConvert...spring中借鉴 / yy中的json转换-bean之间转换 /填充数据转换  定义接口 / bean定义接口来规范set /get方法 default
+        https://cloud.tencent.com/developer/article/1771077
+
+
 3.定位   匹配  https://cloud.tencent.com/developer/article/1840092  - map -   https://cloud.tencent.com/developer/article/1840091  + SPEL（xx---yonyou注解实现）
               xpath
-4.格式化   https://cloud.tencent.com/developer/article/1771077
+4.格式化
 
 
 基石
