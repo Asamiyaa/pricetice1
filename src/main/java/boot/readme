@@ -7,35 +7,6 @@
 
 3.定位   匹配  https://cloud.tencent.com/developer/article/1840092  - map -   https://cloud.tencent.com/developer/article/1840091  + SPEL（xx---yonyou注解实现）
               xpath
-4.格式化
-
-
-基石
-1.
-<!--项目依赖组织-->
-    <resources>
-      <resource>
-        <directory>src/main/resources</directory>
-        <filtering>true</filtering>
-        <includes>
-          <include>**/*.properties</include>
-          <include>**/*.yml</include>
-        </includes>
-      </resource>
-      <resource>
-        <directory>src/main/java</directory>
-        <filtering>true</filtering>
-        <includes>
-          <include>**/*.properties</include>
-          <include>**/*.yml</include>
-        </includes>
-        <excludes>
-          <exclude>**/*.java</exclude>
-          <exclude>**/*.class</exclude>
-        </excludes>
-      </resource>
-    </resources>
-
 
 
 =============== meta ===============
@@ -47,6 +18,35 @@
 
 
 ============== 整理 ==================
+
+分层
+    基石
+    1.
+    <!--项目依赖组织-->
+        <resources>
+          <resource>
+            <directory>src/main/resources</directory>
+            <filtering>true</filtering>
+            <includes>
+              <include>**/*.properties</include>
+              <include>**/*.yml</include>
+            </includes>
+          </resource>
+          <resource>
+            <directory>src/main/java</directory>
+            <filtering>true</filtering>
+            <includes>
+              <include>**/*.properties</include>
+              <include>**/*.yml</include>
+            </includes>
+            <excludes>
+              <exclude>**/*.java</exclude>
+              <exclude>**/*.class</exclude>
+            </excludes>
+          </resource>
+        </resources>
+
+
 
 
 
