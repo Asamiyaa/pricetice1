@@ -1,3 +1,1462 @@
 
     1.灰度发布方案 ： https://cloud.tencent.com/developer/article/1178722
     2.蓝绿部署、金丝雀发布（灰度发布）、A/B测试的准确定义：https://www.lijiaocn.com/%E6%96%B9%E6%B3%95/2018/10/23/devops-blue-green-deployment-ab-test-canary.html
+
+
+package com.boot;
+
+/***
+ *
+ *1.devops--敏捷开发--将本地代码快速推到测试环境--docker...
+ *
+ * ***** oracle.com相关指令文档 *** 去官网查看
+ *
+ * 2.基于JDK命令工具
+ *      0.-xx参数
+ *             1.-XX:[+1]<name> 启用或禁用参数
+ *             2.-XX:<name>=<value>
+ *         -Xms 等价于 -XX:initilaHeapSize
+ *         -Xmx等价于  -XX:MaxHeapSize
+ *         -Xss        -XX:ThreadstackSize
+
+ *******************************************
+ *
+ *     1.jinfo
+ *              1、 jps / ps ..查看进程号
+ *              2.获取参数值  jinfo 进程号 > tomcat.txt
+*                   jinfo -flag ThreadstackSize 进程号
+*                   jinfo -flags 进程号    查看进程下所有设置修改过的参数，可能是自己设置的，也可能是tomcat设置的
+ *                   java -XX:PrintFlagsFinal -version 得到参数键值  = 默认值   := 被用户或者jvm修改后的值
+ *                  > a.txt 重定向到文件
+ *              3.less tomcat.txt ...进行查找 G ‘最后’   查看当前进程的堆栈、设置参数 开启关闭 等信息
+                   没有单位默认就是byte ????
+ *                  Non-default VM flags: -XX:InitialHeapSize=16777216 -XX:+ManagementServer -XX:MaxHeapSize=264241152
+ *                  -XX:MaxNewSize=88080384 -XX:MinHeapDeltaBytes=131072 -XX:NewSize=5570560 -XX:OldSize=11206656
+ *                  -XX:+UseFastUnorderedTimeStamps
+                4.当你不知道某个参数在那个文件时候
+                    grep 'JAVA_OPTS' * 去找
+
+                5.java -XX:+PrintFlagsFinal -version 查看当前虚拟机默认JVM参数
+
+
+ *      2.jstat 主要用来通过垃圾回收相关信息来判断 JVM 性能问题，也可以查看类加载、编译的情况，主要的用法是通过持续的固定时间间隔的输出来观察。
+ *              比如每 3 秒打印一次 GC 回收次数，连续打印 10 次，通过动态的变化来观察 GC 是否过于密集。
+ *
+ *              jstat -gc 2328  5000 每隔5s输出一次
+          单位：kb
+                S0C    S1C    S0U    S1U      EC       EU        OC         OU       MC     MU    CCSC   CCSU   YGC     YGCT    FGC    FGCT     GCT
+                960.0  960.0   0.0    0.4    8192.0   5751.2   20132.0    19609.0   12312.0 12009.2  0.0    0.0       17    0.213   1      0.022    0.235
+
+                S0C：第一个幸存区的大小
+                S1C：第二个幸存区的大小
+                S0U：第一个幸存区的使用大小
+                S1U：第二个幸存区的使用大小
+                EC：伊甸园区的大小
+                EU：伊甸园区的使用大小
+                OC：老年代大小
+                OU：老年代使用大小
+                MC：方法区大小
+                MU：方法区使用大小
+                CCSC:压缩类空间大小
+                CCSU:压缩类空间使用大小
+                YGC：年轻代垃圾回收次数
+                YGCT：年轻代垃圾回收消耗时间
+                FGC：老年代垃圾回收次数
+                FGCT：老年代垃圾回收消耗时间
+                GCT：垃圾回收消耗总时间
+
+            类似于jvisual中的GC --图形化 xmanager
+
+            jvm1.8 内存结构：https://www.cnblogs.com/wengshuhang/articles/10938383.html
+
+            问题：这里堆加起来和总大小对比，不要一看比例就，因为还会在范围内自增的。    jmap -heap 进程号 查看进程信息
+
+ *      3.jmap  内存dump和分析
+ *            方式1.-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=./   -->C:\YangWenjunData\mySrc\MockFramework11
+ *            方式2.使用jmap  --> jps查看已开启进程 jmap -help  jmap -dump:format=b,file=heap.hprof 进程号   ---> sz 下载
+ *
+ *            jvisual加载文件分析 -- jprofile初试
+ *
+ *       4.jstack 进程号 - 线程间状态转化 - 代码层级
+ *          实战死循环导致cpu飙高：
+ *                  1.现在本地此时代码可以访问
+ *                  2.打包远程 --为了结合linux命令
+ *                          1.mvn clean package -DMaven.test.skip
+ *                          2.
+ *          远程推送代码并启动：1.为了部署流程  2.为了 使用linux相关命令进行定位问题
+ *                  1.切到项目目录 mvn clean package -Dmaven.test.skiip
+ *                  2.nohup java -jar xxxx.jar &
+ *
+ *          结合Package.java
+ *
+ * 死循环
+ *          jstack  进程号 > xx.text  --> sz xx.text --> top -p 进程号 -H （查看该进程号对应的线程号）--> 找到前几个 printf "%x" 线程号(转为16进制) --> 在本地的text文件中搜索查看对应栈信息  -> 查看调用代码位置
+ *
+ * 死锁
+ *
+ *          上面一样，访问一次下载文件查看最后 deadlock字眼
+ *
+ *
+ *         5.jvisualVM  -- 当前是本地 如何和远程服务器建立  远程连接？
+ *                 1.在java_home 找到该工具 --选择左侧java程序 点击查看具体信息
+ *                 2.可以导入生成的dump文件，也可以直接查看当前线程信息。执行时间-抽样器...cpu/内存 --> ***直接动态查看***
+ *                 3.添加VisualGC、btrace插件  修改插件中心的地址 对应java版本下不下来所以本地下载安装
+ *                          --https://visualvm.github.io/pluginscenters.html
+ *                          --https://visualvm.github.io/uc/8u131/updates.html  插件地址 手动下载
+ *            连接远程
+ *                 1.添加远程地址
+ *                 2.修改tomcat.sh 中添加jmx相关信息
+ *                      CATALINA_OPTS="$CATALINA_OPTS
+                         -Djava.rmi.server.hostname=192.168.129.128
+                         -Dcom.sun.management.jmxremote
+                         -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.authenticate=true"
+ *                  没有启动起来，查看 ‘ 日志 ’发现8080冲突了
+ *                  还是没起来：https://www.cnblogs.com/wjwen/p/4861419.html
+ *                  3.在jvisualvm添加地址端口信息 -- 任然连不上，估计是ip地址问题和本地连接远程服务器连不上一样
+ *                         ip地址问题
+ *
+ *        ************ 扩展idea同样可以连接远程服务器和这里监控一个道理。判断是数据问题还是程序问题，判断当前运行环境而无需dump后才看*************
+ *
+ *         6.btrace 不重启直接修改字节码技术 调试  --- 生产应急处理  数据问题
+ *                1.安装  btrace在github地址 - 解压 - 配置home /path
+ *
+ *                2.运行脚本（两种方式）
+ *                      1.在jvisualvm中添加btrace插件，添加查拉退货path - 切到对应目录下使用命令行btrace <pid>(被监控id) <script>（编写的java及脚本）
+ *                      2.在jvsualvm中执行
+ *
+ *                3.btrace代码编写
+ *                       1.引入三个jar包
+ *                       2.使用btrace对应的注解 类似java代码一样编写切面一样 Btrace.java
+ *                       3.启动应用
+ *                       4.使用btrace方式  btrace 进程号 btrace对应代码类
+ *                              1.jps -l 查看当前id
+ *                              2.切到对应btrace应用类下执行命令
+ *
+ *                4.btrace使用  -- 这些类都是固定的，只要修改部分就好，都是固定套路
+ *                      1.拦截方法  重载方式 、构造方式 ...
+ *                      2.拦截时机  Kind.ENTRY....
+ *                      3.拦截this.参数，返回值 对象(反射 执行时候需要将该类指定到path ..-cp ...)-正则-环境变量等
+ *                      4.其他  行数=某行是否执行到
+ *
+ *                ***btrace只能本地执行，不可以远程，所以有linux版本****
+ *                ****主要使用在生活环境，但是被修改的字节码不会被还原，在jvm不重启的前提下
+ *                    所以一定要在本地调试好，并且注意性能不要太消耗时间
+ *
+ *
+ *
+ *
+ *
+ *          7.远程调试：Debug.java
+
+ *
+ *
+ */
+
+
+
+public class PerformTool {
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+package com.boot;
+
+public class Package {
+
+    /**
+     *   *****************Linux 环境搭建 和 打包**************************
+     *
+     *1.为了熟练使用linux相关知识命令以便于排查问题
+     2.部署包
+
+     1. su
+     2.输入当前用户密码  进入root
+
+
+     3.复制-在xshell黏贴 修改文件 yum源  -- 注意版本  不要随意执行 这里是32位而不是64
+
+     wget http://mirrors.163.com/centos/7/os/x86_64/Packages/
+
+     wget http://mirrors.163.com/centos/7/os/x86_64/Packages/
+
+     rpm -ivh --force rpm-4.11.3-40.el7.x86_64.rpm  yum-metadata-parser-1.1.4-10.el7.x86_64.rpm python-urlgrabber-3.10-9.el7.noarch.rpm yum-3.4.3-163.el7.centos.noarch.rpm    yum-plugin-fastestmirror-1.1.31-52.el7.noarch.rpm --nodeps --force
+
+
+     rpm -ivh --nodeps http://mirrors.163.com/centos/7.5.1804/os/x86_64/Packages/yum-metadata-parser-1.1.4-10.el7.x86_64.rpm
+     rpm -ivh --nodeps http://mirrors.163.com/centos/7.5.1804/os/x86_64/Packages/yum-plugin-fastestmirror-1.1.31-45.el7.noarch.rpm
+     rpm -ivh --nodeps http://mirrors.163.com/centos/7.5.1804/os/x86_64/Packages/yum-3.4.3-158.el7.centos.noarch.rpm
+
+
+     wget http://mirrors.163.com/centos/6/os/i386/Packages/yum-3.2.29-81.el6.centos.noarch.rpm
+     wget http://mirrors.163.com/centos/6/os/i386/Packages/yum-metadata-parser-1.1.2-16.el6.i686.rpm
+     wget http://mirrors.163.com/centos/6/os/i386/Packages/yum-plugin-fastestmirror-1.1.30-41.el6.noarch.rpm
+     wget http://mirrors.163.com/centos/6/os/i386/Packages/python-iniparse-0.3.1-2.1.el6.noarch.rpm
+
+
+     rpm -ivh python-iniparse-0.3.1-2.1.el6.noarch.rpm
+     rpm -ivh yum-metadata-parser-1.1.2-16.el6.i686.rpm
+     rpm -ivh yum-3.2.29-81.el6.centos.noarch.rpm yum-plugin-fastestmirror-1.1.30-41.el6.noarch.rpm --nodeps --force
+
+
+
+     wget --no-cookies --no-check-certificate --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" "https://download.oracle.com/otn-pub/java/jdk/8u191-b12/2787e4a523244c269598db4e85c51e0c/jdk-8u191-linux-x64.tar.gz"
+
+     4.配置相关工具
+
+     5. jdk tomcat
+     ---报错wget --no-check-certificate --no-cookies --header "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/8u181-b13/96a7b8442fe848ef90c96a2fad6ed6d1/jdk-8u181-linux-x64.tar.gz
+     上传 rz 下载sz https://www.cnblogs.com/yyl6/p/9705980.html
+     解压 - 安装 ：https://www.jianshu.com/p/5f9b4682a6c5
+     tomcat :https://www.cnblogs.com/yw-ah/p/9770971.html
+
+     当前问题 设置不生效。 需要手动在shell 中执行才可以 ---TODO***************
+     export JAVA_HOME=/usr/jdk/jdk1.8.0_112
+     export CLASSPATH=$JAVA_HOME/lib/
+     export PATH=$PATH:$JAVA_HOME/bin
+     export PATH JAVA_HOME CLASSPATH
+
+     export JAVA_HOME=/usr/jdk/jdk1.8.0_112
+     export JRE_HOME=$JAVA_HOME/jre
+     sh /usr/tomcat/apache-tomcat-8.0.38/bin/startup.sh
+
+
+     直接编译没作用
+
+
+
+     6.固定ip  -- 暂时没有弄，因为担心网络会连不上外网 。linux系统host修改 https://www.cnblogs.com/heruiguo/p/7943006.html
+     service iptables stop(但是重启后又会开启，所以是暂时的)：https://blog.csdn.net/qiuwenjie123/article/details/79394525
+     未实：https://blog.csdn.net/qq_30421153/article/details/86065885  网络设置问题
+
+
+     7.使用idea通过mvn连接远程服务器并部署包  -- mvn相关学习
+     远程执行	https://www.cnblogs.com/lingluo2017/p/11529679.html
+     打包没有找到。路径有问题
+     直接打jar / war 过程对比
+            打war;1.修改pom war  2.在boot类继承继承SpringBootServletInitializer，并重写configure方法 详见SpringBootApplication
+
+     8.redis安装
+            1.make编译  https://www.jianshu.com/p/bc84b2b71c1c
+
+     0.肯定是idea可以启动并访问才去打包
+     1.C:\YangWenjunData\mySrc\MockFramework11>mvn clean package -Dmaven.test.skip
+     2.idea 打包的jar运行报 “XXX中没有主清单属性”:https://blog.csdn.net/banjing_1993/article/details/83073210
+     3.打包后本地访问没问题 推到linux ----这个完全可以自动化
+     4.nohup java -jar MockFramework-1.0-SNAPSHOT.jar &
+     5.在虚拟机内部访问 因为远程访问不了 网络问题 ------TODO
+     6.远程不是访问8080吗？端口看哪里？--后台一直在报错。连接不到jdbc --注意分析日志 而不是简单的报错信息
+     7.拆出项目 不连db 否则启动都有问题  重新建一个项目-导入setting** --按照上面打包测试 没问题
+     000000000000000000000000000000000000
+
+
+
+
+
+     8.测试性能 - 关闭访问并没有解决因为后台是死循环，机器声音加大，因为cpu 巨大
+
+
+
+     8。远程调试  --- idea
+
+
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     *
+     */
+
+}
+
+
+
+
+
+package com.boot;
+
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
+
+/**上面的run - configure -editConfigure  -- 这是修改已有的，
+ * 该文件右键 - create ..main... - configure
+ * 1.设置对应参数
+ * 2.
+ */
+public class OutOfmemory {
+    //-Xmx32M -Xms32M
+    static List<User> luser = new ArrayList<User>();//Exception in thread "main" java.lang.OutOfMemoryError: Java heap space
+
+    //-XX:MetaspaceSize=32M -XX:MaxMetaspaceSize=32M
+    //static List<String> strs = new ArrayList<>();   问题：1.静态属性不在metaspace吗？ 2.string常量池不在吗？
+
+    //引入asm动态生成class文件
+    //static List<Class> classes = new ArrayList<>(); //Exception in thread "main" java.lang.OutOfMemoryError: Metaspace
+    public static void main(String[] args) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException {
+        while(true){
+            luser.add(new User());
+//            strs.add("12");
+//            classes.addAll(Metaspace.createClasses());
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+package com.boot;
+
+import com.mysql.jdbc.Statement;
+import org.apache.ibatis.executor.Executor;
+import org.apache.ibatis.executor.statement.StatementHandler;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.plugin.*;
+import org.apache.ibatis.session.ResultHandler;
+import org.apache.ibatis.session.RowBounds;
+
+import java.util.Properties;
+
+@Intercepts({
+        @Signature(method = "update", type = Executor.class, args = {MappedStatement.class, Object.class}),
+//        @Signature(method = "query", type = StatementHandler.class, args = {Statement.class, ResultHandler.class}),
+        @Signature(method = "query",
+                type = Executor.class,
+                args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class}
+        )
+})
+public class MyInterceptor implements Interceptor {
+
+    /**
+     * 这个方法很好理解
+     * 作用只有一个：我们不是拦截方法吗，拦截之后我们要做什么事情呢？
+     *      这个方法里面就是我们要做的事情
+     *
+     * 解释这个方法前，我们一定要理解方法参数 {@link Invocation} 是个什么鬼？
+     * 1 我们知道，mybatis拦截器默认只能拦截四种类型 Executor、StatementHandler、ParameterHandler 和 ResultSetHandler
+     * 2 不管是哪种代理，代理的目标对象就是我们要拦截对象，举例说明：
+     *      比如我们要拦截 {@link Executor#update(MappedStatement ms, Object parameter)} 方法，
+     *      那么 Invocation 就是这个对象，Invocation 里面有三个参数 target method args
+     *          target 就是 Executor
+     *          method 就是 update
+     *          args   就是 MappedStatement ms, Object parameter
+     *
+     *   如果还是不能理解，我再举一个需求案例：看下面方法代码里面的需求
+     *
+     *  该方法在运行时调用
+     */
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+
+        /*
+         * 需求：我们需要对所有更新操作前打印查询语句的 sql 日志
+         * 那我就可以让我们的自定义拦截器 MyInterceptor 拦截 Executor 的 update 方法，在 update 执行前打印sql日志
+         * 比如我们拦截点是 Executor 的 update 方法 ：  int update(MappedStatement ms, Object parameter)
+         *
+         * 那当我们日志打印成功之后，我们是不是还需要调用这个query方法呢，如何如调用呢？
+         * 所以就出现了 Invocation 对象，它这个时候其实就是一个 Executor，而且 method 对应的就是 query 方法，我们
+         * 想要调用这个方法，只需要执行 invocation.proceed()
+         */
+
+        /* 因为我拦截的就是Executor，所以我可以强转为 Executor，默认情况下，这个Executor 是个 SimpleExecutor */
+        Executor executor = (Executor)invocation.getTarget();
+
+        System.out.println("this is mybatis plugin test");
+
+        /*
+         * Executor 的 update 方法里面有一个参数 MappedStatement，它是包含了 sql 语句的，所以我获取这个对象
+         * 以下是伪代码，思路：
+         * 1 通过反射从 Executor 对象中获取 MappedStatement 对象
+         * 2 从 MappedStatement 对象中获取 SqlSource 对象
+         * 3 然后从 SqlSource 对象中获取获取 BoundSql 对象
+         * 4 最后通过 BoundSql#getSql 方法获取 sql
+         */
+//        MappedStatement mappedStatement = ReflectUtil.getMethodField(executor, MappedStatement.class);
+//        SqlSource sqlSource = ReflectUtil.getField(mappedStatement, SqlSource.class);
+//        BoundSql boundSql = sqlSource.getBoundSql(args);
+//        String sql = boundSql.getSql();
+//        logger.info(sql);
+
+        /*
+         * 现在日志已经打印，需要调用目标对象的方法完成 update 操作
+         * 我们直接调用 invocation.proceed() 方法
+         * 进入源码其实就是一个常见的反射调用 method.invoke(target, args)
+         * target 对应 Executor对象
+         * method 对应 Executor的update方法
+         * args   对应 Executor的update方法的参数
+         */
+
+        return invocation.proceed();
+    }
+
+    /**
+     * 这个方法也很好理解
+     * 作用就只有一个：那就是Mybatis在创建拦截器代理时候会判断一次，当前这个类 MyInterceptor 到底需不需要生成一个代理进行拦截，
+     * 如果需要拦截，就生成一个代理对象，这个代理就是一个 {@link Plugin}，它实现了jdk的动态代理接口 {@link InvocationHandler}，
+     * 如果不需要代理，则直接返回目标对象本身
+     *
+     * Mybatis为什么会判断一次是否需要代理呢？
+     * 默认情况下，Mybatis只能拦截四种类型的接口：Executor、StatementHandler、ParameterHandler 和 ResultSetHandler
+     * 通过 {@link Intercepts} 和 {@link Signature} 两个注解共同完成
+     * 试想一下，如果我们开发人员在自定义拦截器上没有指明类型，或者随便写一个拦截点，比如Object，那Mybatis疯了，难道所有对象都去拦截
+     * 所以Mybatis会做一次判断，拦截点看看是不是这四个接口里面的方法，不是则不拦截，直接返回目标对象，如果是则需要生成一个代理
+     *
+     *  该方法在 mybatis 加载核心配置文件时被调用
+     */
+    @Override
+    public Object plugin(Object target) {
+        /*
+         * 看了这个方法注释，就应该理解，这里的逻辑只有一个，就是让mybatis判断，要不要进行拦截，然后做出决定是否生成一个代理
+         *
+         * 下面代码什么鬼，就这一句就搞定了？
+         * Mybatis判断依据是利用反射，获取这个拦截器 MyInterceptor 的注解 Intercepts和Signature，然后解析里面的值，
+         * 1 先是判断要拦截的对象是四个类型中 Executor、StatementHandler、ParameterHandler、 ResultSetHandler 的哪一个
+         * 2 然后根据方法名称和参数(因为有重载)判断对哪一个方法进行拦截  Note：mybatis可以拦截这四个接口里面的任一一个方法
+         * 3 做出决定，是返回一个对象呢还是返回目标对象本身(目标对象本身就是四个接口的实现类，我们拦截的就是这四个类型)
+         *
+         * 好了，理解逻辑我们写代码吧~~~  What !!! 要使用反射，然后解析注解，然后根据参数类型，最后还要生成一个代理对象
+         * 我一个小白我怎么会这么高大上的代码嘛，怎么办？
+         *
+         * 那就是使用下面这句代码吧  哈哈
+         * mybatis 早就考虑了这里的复杂度，所以提供这个静态方法来实现上面的逻辑
+         */
+        return Plugin.wrap(target, this);
+    }
+
+    /**
+     * 这个方法最好理解，如果我们拦截器需要用到一些变量参数，而且这个参数是支持可配置的，
+     *  类似Spring中的@Value("${}")从application.properties文件获取
+     * 这个时候我们就可以使用这个方法
+     *
+     * 如何使用？
+     * 只需要在 mybatis 配置文件中加入类似如下配置，然后 {@link Interceptor#setProperties(Properties)} 就可以获取参数
+     *      <plugin interceptor="liu.york.mybatis.study.plugin.MyInterceptor">
+     *           <property name="username" value="LiuYork"/>
+     *           <property name="password" value="123456"/>
+     *      </plugin>
+     *      方法中获取参数：properties.getProperty("username");
+     *
+     * 问题：为什么要存在这个方法呢，比如直接使用 @Value("${}") 获取不就得了？
+     * 原因是 mybatis 框架本身就是一个可以独立使用的框架，没有像 Spring 这种做了很多依赖注入的功能
+     *
+     *  该方法在 mybatis 加载核心配置文件时被调用
+     */
+    @Override
+    public void setProperties(Properties properties) {
+        String username = properties.getProperty("username");
+        String password = properties.getProperty("password");
+        System.out.println("==>"+username);
+        System.out.println("==>"+password);
+        // TODO: 2019/2/28  业务逻辑处理...
+    }
+}
+
+
+
+
+
+
+
+
+0.Kubectl基本操作命令  ：https://www.kubernetes.org.cn/doc-48   +  https://blog.csdn.net/u011095110/article/details/83545350 
+  Kubernetes中Namespace与Pod概念:  https://blog.csdn.net/weixin_45186298/article/details/103926743
+  pod和service关系：https://zhuanlan.zhihu.com/p/105006577?utm_source=wechat_session  ********* Kubernetes in Action中文版
+  		1.cluster  cluster是 计算、存储和网络资源的集合，k8s利用这些资源运行各种基于容器的应用。
+		2.master    master是cluster的大脑，他的主要职责是调度，即决定将应用放在那里运行。master运行linux操作系统，可以是物理机或者虚拟机。为了实现高可用，可以运行多个master。
+		3.node	node的职责是运行容器应用。node由master管理，node负责监控并汇报容器的状态，同时根据master的要求管理容器的生命周期。node运行在linux的操作系统上，可以是物理机或者是虚拟机。
+		4.pod	pod是k8s的最小工作单元。每个pod包含一个或者多个容器。pod中的容器会作为一个整体被master调度到一个node上运行。
+		5.controller	k8s通常不会直接创建pod,而是通过controller来管理pod的。controller中定义了pod的部署特性，比如有几个剧本，在什么样的node上运行等。为了满足不同的业务场景，k8s提供了多种controller，包括deployment、replicaset、daemonset、statefulset、job等。
+
+1.k8s指导文章阅读及笔记：《Kubernetes Handbook——Kubernetes 中文指南/云原生应用架构实践手册》 handbook
+	1.1 k8s-YAML配置文件：https://www.cnblogs.com/bigberg/p/9203619.html  不要使用tab
+	1.2 容器技术 ：https://blog.fleeto.us/	
+	
+2.Kubernetes 的高级调度  https://blog.fleeto.us/post/adv-scheduler-in-k8s/  更灵活的pod/node/pod之间调度
+3.可以执行kubectl top pod -n xxx 来查看对应的pod信息/node信息 同样也可以进入pod中执行相关命令查看更多细节
+4.k8s指南 https://kubernetes.feisky.xyz/troubleshooting/index
+
+
+
+对比xargs 和 mount |grep '/var/lib/docker/' - 记得有个横杠 。。。。<== 将输出作为参数。
+
+
+[root@vcs-dev-master001 logs]# kubectl get pod -n vcs -o wide   === 通过 -o wide得到更多 比如当前pod在哪个node上面。。。
+NAME                                                              READY   STATUS             RESTARTS   AGE     IP              NODE                        NOMINATED NODE   READINESS GATE
+ 
+  进入pod可以通过ps -ef查看对应的进程 比如searcher是否启动....
+
+1.kafka问题排查  https://jingyan.baidu.com/article/eb9f7b6d367679869364e8d4.html
+	df -h 
+	这个命令看看pod 的磁盘情况
+2.kubectl get pods | grep kafka 
+
+然后这条命令看看，kafka 的pod 情况
+
+3.kubectl get events | grep kafka  /////    kubectl get pod --all-namespaces |grep kafka
+
+4.#进入 kafka 的 pod
+kubectl exec -it alibaba-kafka-cluster-private-paas-default-0 bash    ==> 如何从config配置中的kafka信息获取到对应的pod....????
+
+	通过原生kafka，查看对应的topic是否有数据 :https://www.cnblogs.com/sunshine-blog/p/11929867.html
+	zookeeper的端口号2181和broker的端口号9092为什么不同呢？
+		你可以这样理解，zookeeper和kafka是两个程序。这两个程序启动都有自己的默认端口，zookeeper的默认端口是2181，kafka的默认端口是9092。一台计算机上两个程序的所占用的端口是不能一样的，所以不能重复。9092是kafka的默认端口，写在kafka的配置文件里面的，你看视频里面老师启动kafka的时候指定了配置文件server.properties。
+
+	kafka里面配置的ip地址如何找到对应的pod???  192.168.3.125:9092,192.168.3.123:9092,192.168.3.124:9092
+	如何找到对应zookeeper配置呢？
+	./kafka-consumer-groups.sh --zookeeper 172.21.11.255:2181 --list
+	./kafka-consumer-groups.sh  --bootstrap-server localhost:9092 --list
+
+
+
+# admin 模式
+sudo su admin
+	1.su、sudo、sudo su、sudo -i的用法和区别   :    https://blog.csdn.net/huang_shao1/article/details/82957138
+
+
+#进入到 kafka 命令行文件夹
+cd /home/admin/KafkaProxy/bin/
+
+#查看监听者的消费积压情况
+./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic stg_rljghxx_yushirkgl
+
+5.control C退出，执行下这个
+
+./kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group vcs-dataengine
+
+=====引入了zookeeper====
+
+
+
+======读写权限问题=====
+1.mount ..  读写权限没有了，所以导致起不来。增加副本使其到不同的node上就可以正常执行了。
+2.如何查看pod的挂载点和mount目录关系？
+3.如何查看当前pod在哪个node上面？  kubectl get pod -n vcs -o wide   https://blog.csdn.net/u013288190/article/details/109681439
+4.查看每个node对应的ip   kubectl get service -n vcs      原理：https://xw.qq.com/amphtml/20201021A0IGSX00  
+
+5.启动manager --purge 不能用？报错？=== 通过kubectl delete pod xxxxxpod名字 -n  vcs 删除 自动拉起来
+6.history pod 没有启动？报错没有是什么问题？  1. 先查看controller的日志信息，根据代码确定走到哪里报错  2.是否configmap没有配置对应的history信息
+
+7.pod的健康:https://blog.csdn.net/weixin_44907813/article/details/108035969
+8.pod service 管理：kubectl get svc   
+
+9.namespace /servcie /pod /container.....资源概念 。。。 创建命名空间，提交到k8s容器：https://blog.csdn.net/qq_41453285/article/details/111826823
+
+10.Kubernetes K8S之Pod跨namespace名称空间访问Service服务  https://www.cnblogs.com/shetao/p/14340124.html
+这里是指通过Service的Name进行通信访问，而不是通过Service的IP【因因为每次重启Service，NAME不会改变，而IP是会改变的】
+
+11.删除：通过delete会自动拉起来，通过删除deplement.yaml文件
+    kubectl delete pod xxx-history-xxx-deployment-6f8fdd4dgkph -n命名空间  === 不能自动更新代码只能重新拉起pod **** kubectl delete deployment jenkins2 -n jenkins 真正删除
+    
+		Kubernetes强制删除Pod、namespace资源 ：# 删除POD
+		kubectl delete pod PODNAME --force --grace-period=0
+
+		# 删除NAMESPACE
+		kubectl delete namespace NAMESPACENAME --force --grace-period=0
+		# 删除default namespace下的pod名为pod-to-be-deleted-0
+		ETCDCTL_API=3 etcdctl del /registry/pods/default/pod-to-be-deleted-0
+
+		# 删除需要删除的NAMESPACE
+		etcdctl del /registry/namespaces/NAMESPACENA
+
+12.kubectl apply -f namespace.yaml   / kubectl create -f my-crontab.yaml
+
+13.helm操作
+  helm delete --purge xxx名字 service=xxxxcontroller-manager
+  helm install . --name $service   service=xxxe-controller-manager
+  helm delete --purge  $service
+  安装原理：需要当前目录有temlate文件夹定义deploment/service/configmap ; 需要values.yaml进行拉取从本地仓库拉取对应分支 ， 进行安装，这就是helm干的事情也是sps-干的事情。
+  servcie和pod名字关系：xxxcontroller-manager-84f85bcfb8-wrn8s  pod名字再去后面加了标识。前面一样的。
+  
+14. editpod没有看到副本数量 
+    kubectl get  deploy -n 命名空间 |grep xx  
+    kubectl edit deploy -n 命名空间 xxx-xxxx-deployment（刚才查到的）
+
+  
+0.排错概览 : https://kubernetes.feisky.xyz/troubleshooting/index
+1.对 kubeadm 进行故障排查 : https://kubernetes.io/zh/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/ 
+2.kubectl logs、exec、port-forward 执行失败问题解决 ：https://www.jianshu.com/p/fd9941c21e55
+
+
+
+
+文章链接：《Kubernetes Handbook——Kubernetes 中文指南/云原生应用架构实践手册》：https://jimmysong.io/kubernetes-handbook/
+	 《命令操作手册》						    https://www.kubernetes.org.cn/docs
+
+
+云原生：
+
+					使用轻量级的容器打包
+					使用最合适的语言和框架开发
+					以松耦合的微服务方式设计
+					以API为中心的交互和协作
+					无状态和有状态服务在架构上界限清晰
+					不依赖于底层操作系统和服务器
+					部署在自服务、弹性的云基础设施上
+					通过敏捷的DevOps流程管理
+					自动化能力
+					通过定义和策略驱动的资源分配
+
+
+
+首先说一下Docker、Kubernetes、Helm都是什么，和三者的关系
+						- Docker是用来打包程序的配置文件和程序本身的容器（container）技术。docker生成的container，可以在任何环境（无论你是windows电脑，还是linux）里运行，不需要再做任何配置。
+						- kubernetes用来部署docker的containers。
+						- helm是kubernetes的包管理软件。
+						云原生的代表技术包括 容器、服务网格、微服务、不可变基础设施 和 声明式 API。\
+							面向分布式设计（Distribution）：容器、微服务、API 驱动的开发；
+							面向配置设计（Configuration）：一个镜像，多个环境配置；
+							面向韧性设计（Resistancy）：故障容忍和自愈；
+							面向弹性设计（Elasticity）：弹性扩展和对环境变化（负载）做出响应；
+							面向交付设计（Delivery）：自动拉起，缩短交付时间；
+							面向性能设计（Performance）：响应式，并发和资源高效利用；
+							面向自动化设计（Automation）：自动化的 DevOps；
+							面向诊断性设计（Diagnosability）：集群级别的日志、metric 和追踪；
+							面向安全性设计（Security）：安全端点、API Gateway、端到端加密；
+							云原生不是微服务或基础设施即代码。微服务意味着更快的开发周期和更小的独特功能，但是单片应用程序可以具有相同的功能，使其能够通过软件有效管理，并且还可以从云原生基础设施中受益。
+
+					微服务场景：
+						 存在性能问题的服务，微服务化后可以扩展
+						 变动多的服务
+						 可以单独提供对外能力的服务
+
+					解决这个问题的办法就是容器。容器是继虚拟机之后更高层次的抽象，在这层抽象中，整个应用程序的每个组件被单独打包成一个个独立的单元，这个单元就是所谓的容器。通过这种方式，可以将代码和应用服务从底层架构中分离出来，实现了完全的可移植性（在任何操作系统或环境上运行应用的能力）。所以在上面的例子中，Ubuntu 操作系统就是一个单元（容器）。	 
+
+					更高层次的容器，比如 MySQL 容器，实际上会包含必要的库来与底层的操作系统容器通信和集成。所以你可以把容器看成是整个应用堆栈中的一层，每层都依赖于下层的单元。而这就类似于船舶或港口中集装箱的堆叠方式，每个容器的稳定性都依赖于下面的容器的支持。
+
+					与容器相关的一个重要概念是微服务。将应用程序的各个组件拆分并打包成独立的服务，这样每个组件都可以很容易地被替换、升级、调试。上面的例子中，我们会为 Vue 前端创建一个微服务，为 MySQL 数据库创建另一个微服务，为 Java 中间件部分创建另一个微服务，以此类推。很明显，**** 微服务与容器化是相辅相成的。***
+
+
+					声明式编程和命令式编程有什么区别？ https://www.zhihu.com/question/22285830
+					最重要的是你需要认识到 Kubernetes 利用了 “期望状态” 原则。就是说，你定义了组件的期望状态，而 Kubernetes 要将它们始终调整到这个状态。
+
+
+					服务网格 (Service Mesh) 用于管理服务之间的网络流量，是云原生的网络基础设施层，也是 Kubernetes 次世代的云原生应用 的重要组成部分。
+					Istio Handbook——Istio 服务网格进阶实战。 *** 动态切换服务进行测试。。。动态跟踪服务。。展示
+
+
+					Kubernetes通过声明式配置，真正让开发人员能够理解应用的状态，并通过同一份配置可以立马启动一个一模一样的环境
+
+
+					Service：直接用Service提供cluster内部的负载均衡，并借助cloud provider提供的LB提供外部访问
+					Ingress：还是用Service提供cluster内部的负载均衡，但是通过自定义LB提供外部访问
+					Service Load Balancer：把load balancer直接跑在容器中，实现Bare Metal的Service Load Balancer
+					Custom Load Balancer：自定义负载均衡，并替代kube-proxy，一般在物理部署Kubernetes时使用，方便接入公司已有的外部服务
+
+					Kubernetes中的应用将作为微服务运行，但是Kubernetes本身并没有给出微服务治理的解决方案，比如服务的限流、熔断、良好的灰度发布支持等。
+					Traffic Management：API网关
+					Observability：服务调用和性能分析
+					Policy Enforcment：控制服务访问策略
+					Service Identity and Security：安全保护
+
+					Service Mesh，可以将它比作是应用程序或者说微服务间的 TCP/IP，负责服务之间的网络调用、限流、熔断和监控。对于编写应用程序来说一般无须关心 TCP/IP 这一层（比如通过 HTTP 协议的 RESTful 应用），同样使用 Service Mesh 也就无须关心服务之间的那些原来是通过应用程序或者其他框架实现的事情，比如 Spring Cloud、OSS，现在只要交给 Service Mesh 就可以了。
+
+					复杂环境下落地Service Mesh的挑战与实践:https://tech.meituan.com/2020/12/03/service-mesh-in-meituan.html
+
+					OAM原则：其目标不仅限于 Kubernetes 之上的又一上层抽象，而是对于一切云服务，在基于资源对象的基础上，Trait 来控制 Kubernetes 中的一众高层次非可调度的资源对象，如 AutoScaler、Volume、Ingress，Istio 中的流量配置对象 VirtualService、DestinationRule 等，还可容纳更多的云服务，对于 Serverless 时代的去基础设施化的思想不谋而合，未来可期。
+
+					CI/CD流程Kubernetes本身也没有提供
+					Service Mesh：解决微服务治理问题
+					Auto Pilot：自动驾驭能力，服务自动扩展，智能运维
+				    FaaS/Serverless：用户无需再关注底层平台，只需要部署服务，根据服务的资源消耗和使用时间付费
+
+					
+					spring  vs k8s 整合 --- 如何融合
+							1.最基础的服务注册发现功能来说，其方式分为客户端服务发现和服务端服务发现两种，Java应用中常用的方式是使用Eureka和Ribbon做服务注册发现和负载均衡，这属于客户端服务发现，而在Kubernetes中则可以使用DNS、Service和Ingress来实现，不需要修改应用代码，直接从网络层面来实现。
+							2.流量路由规则（如负载均衡策略、入口路由、出口路由、百分比路由、限流、熔断、超时限制、故障注入等）、自动缩放策略、升级策略、发布策略等。
+
+
+	 	k8s
+	 			1.Kubernetes的目标旨在消除编排物理/虚拟计算，网络和存储基础设施的负担，并使应用程序运营商和开发人员完全将重点放在以容器为中心的原语上进行自助运营。
+	 			   Kubernetes 具备完善的集群管理能力，包括多层次的安全防护和准入机制、多租户应用支撑能力、透明的服务注册和服务发现机制、内建负载均衡器、故障发现和自我修复能力、服务滚动升级和在线扩容、可扩展的资源自动调度机制、多粒度的资源配额管理能力。 Kubernetes 还提供完善的管理工具，涵盖开发、部署测试、运维监控等各个环节。
+
+
+	 			2.Kubernetes主要由以下几个核心组件组成：
+					etcd保存了整个集群的状态；  == 
+					apiserver提供了资源操作的唯一入口，并提供认证、授权、访问控制、API注册和发现等机制； == gateway
+					controller manager负责维护集群的状态，比如故障检测、自动扩展、滚动更新等；  == cotrollerManager
+					scheduler负责资源的调度，按照预定的调度策略将Pod调度到相应的机器上；
+					kubelet负责维护容器的生命周期，同时也负责Volume（CSI）和网络（CNI）的管理；
+					Container runtime负责镜像管理以及Pod和容器的真正运行（CRI）；
+					kube-proxy负责为Service提供cluster内部的服务发现和负载均衡；  === ? 如何查看
+					除了核心组件，还有一些推荐的插件，其中有的已经成为CNCF中的托管项目：
+
+					CoreDNS负责为整个集群提供DNS服务
+					Ingress Controller为服务提供外网入口
+					Prometheus提供资源监控
+					Dashboard提供GUI
+					Federation提供跨可用区的集群
+
+				3.高层设计一定是从业务出发，而不是过早的从技术实现出发。
+				  尽量避免让操作机制依赖于全局状态，因为在分布式系统中要保证全局状态的同步是非常困难的。
+				  高低级功能 -- 降级 
+
+				4.API 对象是 Kubernetes 集群中的管理操作单元。Kubernetes 集群系统每支持一项新功能，引入一项新技术，一定会新引入对应的 API 对象，支持对该功能的管理操作。例如副本集 Replica Set 对应的 API 对象是 RS。
+
+					每个 API 对象都有 3 大类属性：元数据 metadata、规范 spec 和状态 status。元数据是用来标识 API 对象的，每个对象都至少有 3 个元数据：namespace，name 和 uid；除此以外还有各种各样的标签 labels 用来标识和匹配不同的对象，例如用户可以用标签 env 来标识区分不同的服务部署环境，分别用 env=dev、env=testing、env=production 来标识开发、测试、生产的不同服务。规范描述了用户期望 Kubernetes 集群中的分布式系统达到的理想状态（Desired State），例如用户可以通过复制控制器 Replication Controller 设置期望的 Pod 副本数为 3；status 描述了系统实际当前达到的状态（Status），例如系统当前实际的 Pod 副本数为 2；那么复制控制器当前的程序逻辑就是自动启动新的 Pod，争取达到副本数为 3。
+
+				pod:Pod 的设计理念是支持多个容器在一个 Pod 中共享网络地址和文件系统，可以通过进程间通信和文件共享这种简单高效的方式组合完成服务。
+					目前 Kubernetes 中的业务主要可以分为长期伺服型（long-running）、批处理型（batch）、节点后台支撑型（node-daemon）和有状态应用型（stateful application）；分别对应的小机器人控制器为 Deployment、Job、DaemonSet 和 StatefulSet
+				副本集（Replica Set，RS）
+				部署（Deployment）:部署表示用户对 Kubernetes 集群的一次更新操作
+				服务（Service）:RC、RS 和 Deployment 只是保证了支撑服务的微服务 Pod 的数量，但是没有解决如何访问这些服务的问题。一个 Pod 只是一个运行服务的实例，随时可能在一个节点上停止，在另一个节点以一个新的 IP 启动一个新的 Pod，因此不能以确定的 IP 和端口号提供服务。要稳定地提供服务需要服务发现和负载均衡能力。服务发现完成的工作，是针对客户端访问的服务，找到对应的的后端服务实例。在 K8 集群中，客户端需要访问的服务就是 Service 对象。每个 Service 会对应一个集群内部有效的虚拟 IP，集群内部通过虚拟 IP 访问一个服务。在 Kubernetes 集群中微服务的负载均衡是由 Kube-proxy 实现的。Kube-proxy 是 Kubernetes 集群内部的负载均衡器。它是一个分布式代理服务器，在 Kubernetes 的每个节点上都有一个；这一设计体现了它的伸缩性优势，需要访问服务的节点越多，提供负载均衡能力的 Kube-proxy 就越多，高可用节点也随之增多。与之相比，我们平时在服务器端做个反向代理做负载均衡，还要进一步解决反向代理的负载均衡和高可用问题。
+				任务（Job）
+				后台支撑服务集（DaemonSet）:存储，日志和监控等在每个节点上支持 Kubernetes 集群运行的服务。
+				有状态服务集（StatefulSet）:StatefulSet 是用来控制有状态服务，StatefulSet 中的每个 Pod 的名字都是事先确定的，不能更改。适合于 StatefulSet 的业务包括数据库服务 MySQL 和 PostgreSQL，集群化管理服务 ZooKeeper、etcd 等有状态服务.StatefulSet 做的只是将确定的 Pod 与确定的存储关联起来保证状态的连续性。
+				集群联邦（Federation）:在云计算环境中，服务的作用距离范围从近到远一般可以有：同主机（Host，Node）、跨主机同可用区（Available Zone）、跨可用区同地区（Region）、跨地区同服务商（Cloud Service Provider）、跨云平台。Kubernetes 的设计定位是单一集群在同一个地域内，因为同一个地区的网络性能才能满足 Kubernetes 的调度和计算存储连接要求。而联合集群服务就是为提供跨 Region 跨服务商 Kubernetes 集群服务而设计的。
+				持久存储卷（Persistent Volume，PV）和持久存储卷声明（Persistent Volume Claim，PVC）:PV 和 Node 是资源的提供者，根据集群的基础设施变化而变化，由 Kubernetes 集群管理员配置；而 PVC 和 Pod 是资源的使用者，根据业务服务的需求变化而变化，有 Kubernetes 集群的使用者即服务的管理员来配置。
+
+				节点（Node）:是所有 Pod 运行所在的工作主机，可以是物理机也可以是虚拟机。不论是物理机还是虚拟机，工作主机的统一特征是上面要运行 kubelet 管理节点上运行的容器。
+
+				Etcd解析:用于保存集群所有的网络配置和对象的状态信息。
+
+				Kubernetes作为云原生应用的基础调度平台，相当于云原生的操作系统，为了便于系统的扩展，Kubernetes中开放的以下接口，可以分别对接不同的后端，来实现自己的业务逻辑：
+				CRI（Container Runtime Interface）：容器运行时接口，提供计算资源
+				CNI（Container Network Interface）：容器网络接口，提供网络资源
+				CSI（Container Storage Interface）：容器存储接口，提供存储资源
+
+				k8s中的网络：没有懂 ！！！
+				Kubernetes本身并不提供网络功能，只是把网络接口开放出来，通过插件的形式实现。
+				Node IP：宿主机的IP地址
+				Pod IP：使用网络插件创建的IP（如flannel），使跨主机的Pod可以互通
+				Cluster IP：虚拟IP，通过iptables规则访问服务
+
+
+				controller-manager 控制pod 通过cofigmap
+				命令：$ kubectl create -f docs/user-guide/nginx-deployment.yaml --record
+					controller-manager将这个文件放到sps上，searcher方到了数据库，本质都是文件
+									  控制Pod的状态和生命周期。。如何控制的呢?
+									  controller pod项目中就是连接rds，获取searcher配置信息，通过将
+									  cotroller中application...信息塞入configmap来控制。其实applicaion中数据是从sps的values.yaml - application.property中控制的塞入到searcher的cofigmap中国 。。。。。
+									  manger是来控制kv的。controller只有depliment. searcher有depliment和configmap
+
+					删除pod
+						1.为什么删除pod后会重新拉取新打包后的代码而不是...
+						2.如何永久的删除一个pod
+
+				init容器：
+				pause容器：
+				它们看到的网络设备、IP地址、Mac地址等等，跟网络相关的信息，其实全是一份，这一份都来自于 Pod 第一次创建的这个 Infra container。这就是 Pod 解决网络共享的一个解法。
+				Pod 安全策略 
+					是集群级别的资源，它能够控制 Pod 运行的行为，以及它具有访问什么的能力。
+
+
+				存活（liveness）和就绪（readiness）探针
+
+				pod hook
+				Pod Preset
+
+				node:为了管理异构和不同配置的主机，为了便于 Pod 的运维管理，Kubernetes 中提供了很多集群管理的配置和管理功能，通过 namespace 划分的空间，通过为 node 节点创建label和 taint 用于 pod 的调度等。  是物理机也可以是虚拟机
+
+				kubectl get ns
+
+
+				label vs group
+
+				Taint 和 Toleration（污点和容忍）:高级调度功 .Node被设置上污点之后就和Pod之间存在了一种相斥的关系，可以让Node拒绝Pod的调度执行，甚至将Node已经存在的Pod驱逐出去。
+
+				操作： --- 为什么在通过db拉取时无法执行下面命令呢？ ******
+					deployment：
+
+
+					vcs-dataengine-searcher-history-damo-deployment
+					kubectl scale deployment vcs-dataengine-searcher-history-damo-deployment --replicas 2
+
+
+					kubectl get deployment vcs-dataengine-searcher-history-damo-deployment -o yaml
+
+
+				3.7.1 == service
+					1.微服务概念，servcie后面多个pod组成。ip不固定 === endpoint，但service名称是固定的 
+					2.这种模式，kube-proxy 会监视 Kubernetes master 对 Service 对象和 Endpoints 对象的添加和移除。 对每个 Service，它会在本地 Node 上打开一个端口（随机选择）。 ===========> vs springcloud 
+
+						userspace 代理模式 == iptables 代理模式 == ipvs 代理模式	ipvs为负载均衡算法提供了更多选项，例如：  == Headless Service 应用仍然可以使用一种自注册的模式和适配器，对其它需要发现机制的系统能够很容易地基于这个 API 来构建。
+
+																						rr：轮询调度
+																						lc：最小连接数
+																						dh：目标哈希
+																						sh：源哈希
+																						sed：最短期望延迟
+																						nq： 不排队调度
+
+					3.Kubernetes 支持2种基本的服务发现模式 —— 环境变量和 DNS。
+
+					4.发布服务 —— 服务类型
+						ClusterIP：通过集群的内部 IP 暴露服务，选择该值，服务只能够在集群内部可以访问，这也是默认的 ServiceType。
+						NodePort：通过每个 Node 上的 IP 和静态端口（NodePort）暴露服务。NodePort 服务会路由到 ClusterIP 服务，这个 ClusterIP 服务会自动创建。通过请求 <NodeIP>:<NodePort>，可以从集群的外部访问一个 NodePort 服务。  这可以让开发人员自由地安装他们自己的负载均衡器
+
+					5.Ingress 是从Kubernetes集群外部访问集群内部服务的入口	
+						节点：Kubernetes集群中的一台物理机或者虚拟机。
+						集群：位于Internet防火墙后的节点，这是kubernetes管理的主要计算资源。
+						边界路由器：为集群强制执行防火墙策略的路由器。 这可能是由云提供商或物理硬件管理的网关。
+						集群网络：一组逻辑或物理链接，可根据Kubernetes网络模型实现群集内的通信。 集群网络的实现包括Overlay模型的 flannel 和基于SDN的OVS。
+						服务：使用标签选择器标识一组pod成为的Kubernetes服务。 除非另有说明，否则服务假定在集群网络内仅可通过虚拟IP访问。
+
+
+					
+					1.Kubernetes 中提供了良好的多租户认证管理机制，如 RBAC、ServiceAccount 还有各种 Policy 等
+					2.RBAC
+					3.允许访问 kube-controller-manager 组件所需要的资源。
+
+					1.为了管理存储，Kubernetes提供了Secret用于管理敏感信息，ConfigMap存储配置，Volume、PV、PVC、StorageClass等用来管理存储卷。
+					2.ConfigMap API给我们提供了向容器中注入配置信息的机制，ConfigMap可以被用来保存单个属性，也可以用来保存整个配置文件或者JSON二进制大对象。
+							设置环境变量的值
+							在容器里设置命令行参数
+							在数据卷里面创建config文件
+					3.configmap热更新
+							更新 ConfigMap 目前并不会触发相关 Pod 的滚动更新，可以通过修改 pod annotations 的方式强制触发滚动更新。
+					4.Volume：容器磁盘上的文件的生命周期是短暂的，这就使得在容器中运行重要应用时会出现一些问题。首先，当容器崩溃时，kubelet 会重启它，但是容器中的文件将丢失——容器以干净的状态（镜像最初的状态）重新启动。其次，在 Pod 中同时运行多个容器时，这些容器之间通常需要共享文件。
+						capacity 预期。 目前，存储大小是可以设置或请求的唯一资源。未来的属性可能包括 IOPS、吞吐量等。
+
+
+
+					1.使用自定义资源扩展 API == 相当于接口  CRD（CustomResourceDefinition）
+					
+					1.Kubernetes作为一个容器编排调度引擎，资源调度是它的最基本也是最重要的功能
+					2.Kubernetes中有一个叫做kube-scheduler的组件，该组件就是专门监听kube-apiserver中是否有还未调度到node上的pod
+					3.考虑以下两种情况：
+						集群中有新增节点，想要让集群中的节点的资源利用率比较均衡一些，想要将一些高负载的节点上的pod驱逐到新增节点上，这是kuberentes的scheduler所不支持的，需要使用如descheduler这样的插件来实现。
+						想要运行一些大数据应用，设计到资源分片，pod需要与数据分布达到一致均衡，避免个别节点处理大量数据，而其它节点闲置导致整个作业延迟，这时候可以考虑使用kube-batch。
+					
+					1.Kubelet使用liveness probe（存活探针） 资源不足或者bug，如果都不可用很有可能就是bug.否则就是资源问题
+					2.Kubelet使用readiness probe（就绪探针）来确定容器是否已经就绪可以接受流量。 Pod处于非就绪状态，那么它们将会被从service的load balancer中移除。
+					3.注意如果挂在的文件valume不可用，虽然起来了，但是进入pod后发现ps -ef|grep java没有该进程。虽然pod是running，但服务不可用。 ***
+					  并且并没有从负载中移除
+
+					1.通过抽象这些资源对象来控制k8s ResourceQuota -- 限额
+					
+
+				第五章： 真正实践：：：：：：==========未完成
+					第一部分 在CentOS上部署kubernetes集群中介绍了如何通过二进制文件在CentOS物理机（也可以是公有云主机）上快速部署一个kubernetes集群。
+					第二部分介绍如何在kubernetes中的服务发现与负载均衡。
+					第三部分介绍如何运维kubernetes集群。
+					第四部分介绍kubernetes中的存储管理。
+					第五部分关于kubernetes集群和应用的监控。
+					第六部分介绍kuberentes中的服务编排与管理。
+					第七部分介绍如何基于kubernetes做持续集成与发布。
+					第八部分是kubernetes集群与插件的更新升级。
+
+				********************安装对应插件和elk.....
+				0.在CentOS上部署kubernetes集群:https://jimmysong.io/kubernetes-handbook/practice/install-kubernetes-on-centos.html
+
+				1.使用Vistio监控Istio服务网格中的流量
+				2.链路追踪：opentracing 
+				3.helm:
+					1.Helm chart 是用来封装 Kubernetes 原生应用程序的 YAML 文件，可以在你部署应用的时候自定义应用程序的一些 metadata，便与应用程序的分发。
+					2.Helm 和 chart 的主要作用是：
+						应用程序封装
+						版本管理
+						依赖检查
+						便于应用程序分发
+					3.mychart  --- 我们还可以在 templates 目录加其他 Kubernetes 对象的配置，比如 ConfigMap、DaemonSet 等。
+						├── Chart.yaml
+						├── charts # 该目录保存其他依赖的 chart（子 chart）
+						├── templates # chart 配置模板，用于渲染最终的 Kubernetes YAML 文件
+						│   ├── NOTES.txt # 用户运行 helm install 时候的提示信息
+						│   ├── _helpers.tpl # 用于创建模板时的帮助类
+						│   ├── deployment.yaml # Kubernetes deployment 配置
+						│   ├── ingress.yaml # Kubernetes ingress 配置
+						│   ├── service.yaml # Kubernetes service 配置
+						│   ├── serviceaccount.yaml # Kubernetes serviceaccount 配置
+						│   └── tests
+						│       └── test-connection.yaml
+						└── values.yaml # 定义 chart 模板中的自定义配置的默认值，可以在执行 helm install 或 helm update 的时候覆盖
+
+						Helm 常用命令如下：
+
+							helm create：在本地创建新的 chart；
+							helm dependency：管理 chart 依赖；
+							helm intall：安装 chart；
+							helm lint：检查 chart 配置是否有误；
+							helm list：列出所有 release；
+							helm package：打包本地 chart；
+							helm repo：列出、增加、更新、删除 chart 仓库；
+							helm rollback：回滚 release 到历史版本；
+							helm pull：拉取远程 chart 到本地；
+							helm search：使用关键词搜索 chart；
+							helm uninstall：卸载 release；
+							helm upgrade：升级 release；
+
+						helm list|grep controller-manager  其实cotroller-manager和searcher不是两个应用而是一个。只是这个是管理节点。所以你打一个包，就是在一起，
+						    在其中的helm install就是将包安装 
+
+						Chart仓库
+
+
+				4.jekins
+					持续集成与发布，简称CI/CD，是微服务构建的重要环节，也是DevOps中推崇的方法论。
+
+				5.dashboard:界面管理k8s...
+
+					命令: docker --> k8s ---https://jimmysong.io/kubernetes-handbook/guide/kubectl-cheatsheet.html ****
+						1.docker run -d --restart=always -e DOMAIN=cluster --name nginx-app -p 80:80 nginx
+						   kubectl run --image=nginx nginx-app --port=80 --env="DOMAIN=cluster"
+						2.docker ps
+						  kubectl get po
+						3.docker exec -ti a9ec34d98787 /bin/sh
+						  kubectl exec -ti nginx-app-5jyvm -- /bin/sh 
+						4.kubectl logs --previous nginx-app-zibvs
+						5.kubectl get deployment nginx-app    kubectl delete deployment nginx-app
+						6.kubectl top pod 
+
+				  	1.每个Kubernetes集群都有一个集群根证书颁发机构（CA）。 集群中的组件通常使用CA来验证API server的证书，由API服务器验证kubelet客户端证书等。
+				  	2.
+					
+					
+					
+					
+					
+					
+					
+					
+				  	1.应用领域 -- service mesh --isotio --- 微服务解决方案 -- 网络模型
+						1.Kubernetes 设计之初就是按照 Cloud Native 的理念设计的，Cloud Native 中有个重要概念就是微服务的架构设计，当将单体应用拆分微服务后， 随着服务数量的增多，如何微服务进行管理以保证服务的 SLA 呢？为了从架构层面上解决这个问题，解放程序员的创造性，避免繁琐的服务发现、监控、分布式追踪等事务，Service mesh 应运而生。
+						2.微服务中的服务发现	
+							在单体架构时，因为服务不会经常和动态迁移，所有服务地址可以直接在配置文件中配置，所以也不会有服务发现的问题。但是对于微服务来说，应用的拆分，服务之间的解耦，和服务动态扩展带来的服务迁移，服务发现就成了微服务中的一个关键问题。
+
+						3.可观察性使用指标（应用/业务指标和运维指标。）、日志和追踪这些外部输出来理解系统的能力。这些指标、日志和追踪（Tracing）是基于系统内部的事件产生的。	
+						4.什么是 service mesh？ == > https://jimmysong.io/kubernetes-handbook/usecases/service-mesh-fundamental.html
+							可以将它比作是应用程序或者说微服务间的 TCP/IP，负责服务之间的网络调用、限流、熔断和监控。对于编写应用程序来说一般无须关心 TCP/IP 这一层（比如通过 HTTP 协议的 RESTful 应用），同样使用 Service Mesh 也就无须关系服务之间的那些原来是通过应用程序或者其他框架实现的事情，比如 Spring Cloud、OSS，现在只要交给 Service Mesh 就可以了。
+
+							Service mesh 有如下几个特点： 
+
+							应用程序间通讯的中间层
+							轻量级网络代理
+							应用程序无感知
+							解耦应用程序的重试/超时、监控、追踪和服务发现
+
+							service mesh分为:
+								控制平面
+
+								控制平面的特点：
+
+								不直接解析数据包
+								与控制平面中的代理通信，下发策略和配置
+								负责网络行为的可视化
+								通常提供API或者命令行工具可用于配置版本化管理，便于持续集成和部署
+								数据平面
+
+								数据平面的特点：
+
+								通常是按照无状态目标设计的，但实际上为了提高流量转发性能，需要缓存一些数据，因此无状态也是有争议的
+								直接处理入站和出站数据包，转发、路由、健康检查、负载均衡、认证、鉴权、产生监控数据等
+								对应用来说透明，即可以做到无感知部署
+
+						5.在 Cloud Native 架构下，容器的使用给予了异构应用程序的更多可行性，kubernetes 增强的应用的横向扩容能力，用户可以快速的编排出复杂环境、复杂依赖关系的应用程序，同时开发者又无须过分关心应用程序的监控、扩展性、服务发现和分布式追踪这些繁琐的事情而专注于程序开发，赋予开发者更多的创造性。===> serive mesh 分布式限流.重试...
+
+						6.为什么有了如Kubernetes这样的容器编排我们还需要Service Mesh呢，下表是对容器编排调度器的核心功能和缺少的服务级别能力对比。
+
+											核心能力				缺少的服务级别能力
+
+											集群管理					熔断
+											调度						L7细粒度的流量控制
+											编排器和主机维护			混沌测试
+											服务发现					金丝雀部署
+											网络和负载均衡			超时、重试、 budget和deadline
+											有状态服务				按请求路由
+											多租户、多region			策略
+											简单的应用监控检查和性能监控	传输层安全（加密）
+											应用部署					身份和访问控制
+											配置和秘钥管理			配额管理
+											/						协议转换（REST、gRPC）
+
+
+											Service Mesh还有一些遗留的问题没有解决或者说比较薄弱的功能：
+
+									分布式应用的调试，可以参考squash
+									服务拓扑和状态图，可以参考kiali和vistio
+									多租户和多集群的支持
+									白盒监控、支持APM
+									加强负载测试工具slow_cooker、fortio、lago等
+									更高级的fallback路径支持
+									可拔插的证书授权组建，支持外部的CA
+									下面是采纳Service Mesh之前需要考虑的因素。
+
+									因素	可以考虑使用Service Mesh        				强烈建议使用Service Mesh
+									服务通信	基本无需跨服务间的通讯						十分要求服务间通讯
+									可观察性	只关注边缘的指标即可							内部服务和边缘指标都要考虑以更好的了解服务的行为
+									客户关注	主要关注外部API的体验，						内外用户是隔离的	内部外部用户没有区别体验一致
+									API的界限											API主要是作为客户端为客户提供，内部的API与外部是分离的	API即产品，API就是你的产品能力
+									安全模型	通过边缘、防火墙可信内部网络的方式控制安全	    所有的服务都需要认证和鉴权、服务间要加密、zero-trust安全观念
+
+							7.istio:https://jimmysong.io/kubernetes-handbook/usecases/istio.html
+							Istio 解决了开发人员和运维人员所面临的从单体应用向分布式微服务架构转变的挑战。了解它是如何做到这一点的可以让我们更详细地理解 Istio 的服务网格。
+							它的需求包括服务发现、负载均衡、故障恢复、度量和监控等。服务网格通常还有更复杂的运维需求，比如 A/B 测试、金丝雀发布、速率限制、访问控制和端到端认证。
+
+
+							8. springcloud 和 k8s实现微服务的对比以及整合 k8s只是解决了容器编排和部分微服务==》 基于容器在网络基础上service mesh中isotio解决微服务解决方案  
+
+							9.从云---自来水管到serviceless :--以app为最小单位
+									就像无线互联网实际有的地方也需要用到有线连接一样，无服务器架构仍然在某处有服务器。Serverless（无服务器架构）指的是由开发者实现的服务端逻辑运行在无状态的计算容器中，它由事件触发， 完全被第三方管理，其业务层面的状态则被开发者使用的数据库和存储资源所记录。
+
+							10.iaas -- paas --  saas  --- baas(backend ..) -- faas(function)=serverless
+
+
+				  		
+
+				  	1.本地环境搭建
+
+				  	1.基金会/博客/版本迭代/线下交流....
+
+
+
+package com.boot;
+
+
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@ResponseBody
+@RequestMapping({"/cpu"})
+public class Cpu {
+
+  /*  public static void main(String[] args) {
+
+        new Cpu().deadCircle();
+
+    }*/
+
+
+//这种设置只适合于本地。无法发布后出发，所以还会提供简单的controller入口模拟请求
+
+    @RequestMapping("/test")
+    public String test(@RequestParam("name")String name){
+        System.out.println("test");
+        return "hello"+name ;
+    }
+
+
+    @RequestMapping("/dc")
+    public void dc(){
+        deadCircle();
+    }
+
+    //死循环
+    private void deadCircle(){
+        while(true){
+            System.out.println("---deadCircle doing --------");
+        }
+    }
+
+
+
+    @RequestMapping("/dl")
+    public void dl(){
+
+        deadlock();
+    }
+ Object lock1 = new Object();
+ Object lock2 = new Object();
+
+
+    private void deadlock() {
+        new Thread(()->{
+            //1.字符串可以做锁吗？ 为什么这里没有锁住   ---
+            //synchronized ("lock1") {
+            synchronized (lock1) {
+                try {
+                    Thread.sleep(1000);
+                    synchronized (lock2){}
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        new Thread(()->{
+            synchronized (lock2) {
+                try {
+                    Thread.sleep(1000);
+                    synchronized (lock1){}
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    @RequestMapping("/dlslock")
+    public void dlslock(){
+
+        deadlockforTestStringLock();
+    }
+
+    private void deadlockforTestStringLock() {
+        new Thread(()->{
+            synchronized ("lock1") {
+                try {
+                    Thread.sleep(1000);
+                    synchronized ("lock2"){}
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+        new Thread(()->{
+            synchronized ("lock2") {
+                try {
+                    Thread.sleep(1000);
+                    synchronized ("lock1"){}
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+}
+
+
+
+
+package com.boot.LinuxShell;
+//
+//public class command {
+//
+//   todo：高级用法
+//            1.APP_HOME=$(cd $(dirname ${BASH_SOURCE[0]})/..; pwd)
+//            2.$(basename "${APP_HOME}")
+//            3.export
+//            4.ulimit
+//            5.test -z "$JPDA_ENABLE" && JPDA_ENABLE=0
+//            6.let
+//
+//
+    /***
+     *
+     * ***************************查看对应的应用日志********************
+     *
+     * man xxx 提示  也可以直接使用/-n 查找-n参数
+     *
+     * less
+     * 1.打开文件-查找关键字模糊-上下翻页/上一个下一个-全局替换-删除一行-复制一行-行号显示
+     *      more/head/tail  - 空格=下一个 b上一个  全局搜索 /  more好像不行呀  = 显示当前光标行，列
+     *      less  n：重复前一个搜索（与 / 或 ? 有关）N：反向重复前一个搜索（与 / 或 ? 有关） G 跳到末尾  *********
+     *      x,X  : 在一行中，x为向后删除一个字符（相当于del键），X为向前删除一个字符（相当于backspace键）。
+            查看都可以通过q结束
+
+        光标移动  上下左右、pageup/down
+
+     2.编辑
+        vi /vim打开
+            显示行号：:set nu
+            高亮行当前鼠标位置：set cursorcolumn    set cursorline
+            搜索  /
+            统计关键字出现次数：:%s/string//gn
+            替换 ::s/old/new/ "，该命令会将当前这一行中第一个出现的old模式替换为new。
+                 :s/old/new/g "会将当前这一行中的所有old模式替换为new
+                " %s/old/new/g "就能将文件中所有的old模式替换为new，
+
+
+           dd   : 删除光标所在的那一整行。
+           ndd  : n 为数字。从光标开始，删除向下n列。
+           yy   : 复制光标所在的那一行。
+           nyy  : n为数字。复制光标所在的向下n行。
+           p,P  : p 为将已复制的数据粘贴到光标的下一行，P则为贴在光标的上一行。
+           u    : 复原前一个操作 ********相当于ctrl+z
+
+         q 退出命令模式 esc退出编辑模式
+            wq! 记得保存
+           less 查看确认
+     *
+     *
+     * 3.全局查找文件 - 按照大小排序 -按照时间
+     *      find 查找文件目录
+     *             -name
+     *             -mtime -5  文件更改时间在5天内   +3 三天前
+     *             -size +1000c  丹玉1000字节的
+     *             -perm
+     *             -user
+     *             ..
+     *             并执行 find . -name '*2*'|xargs rm -f  注意模糊必须使用* --- 删除一定要小心 -- 默认递归 -- 一定考虑性能 不要查询太长时间
+     *
+     *      #grep 查找字符 - 注意多个文件查找
+     *      grep ‘energywise’ *           #在当前目录搜索带'energywise'行的文件
+     #      grep -r ‘energywise’ *        #在当前目录及其子目录下搜索'energywise'行的文件
+     #      grep -l -r ‘energywise’ *     #在当前目录及其子目录下搜索'energywise'行的文件，但是不显示匹配的行，只显示匹配的文件
+     *      grep + more           more xx.log |grep 'xxx'
+     *
+     *      du -s *|sort -nr  输出是k
+     *
+     * 4.输出 读取
+     *      “>”或”1>”输出重定向：把前面输出的东西输入到后边的文件中，会清除文件原有的内容。
+     *      >>”或”1>>” 追加输出重定向：把前面输出的东西追加到后边的文件尾部，不会清除文件原有的内容。
+     *      “<”或”0<”输入重定向：输入重定向用于改变命令的输入，后面指定输入内容，后面跟文件名。
+     *      “2>>”错误追加重定向：把错误的信息追加到后边的文件中，不会删除文件原有的内容。
+     *
+     *
+     * 5.查看磁盘、内存、cpu、进程、线程、网络、io
+     *
+     *      1.top      总体动态监控  cpu / 内存 / 进程占用      https://www.cnblogs.com/niuben/p/12017242.html
+     *      2.vmstat                 cpu / 内存 / io /system    https://blog.csdn.net/ZYC88888/article/details/79028175 中的vmstat
+     *                           r ： 运行和等待CPU时间片的进程数（若长期大于CPU的个数，说明CPU不足，需要增加CPU）
+                                 b ： 在等待资源的进程数（如等待I/O或者内存交换等）
+                                 如果si、so的值长期不为0，表示系统内存不足，需要增加系统内存
+                                 bi+bo参考值为1000，若超过1000，且wa较大，表示系统IO有问题，应该提高磁盘的读写性能
+                                 in与cs越大，内核消耗的CPU时间就越多
+                                 us+sy参考值为80%，如果大于80%，说明可能存在CPU资源不足的情况
+
+     *--memory
+     *      1.free
+     *
+     *--cpu
+     *      1.sar
+     *
+     *--磁盘
+     *      1.iostat  磁盘读写速度
+     *                      %util： 在统计时间内所有处理IO时间，除以总共统计时间。例如，如果统计间隔1秒，该设备有0.8秒在处理IO，
+                     　　　　而0.2秒闲置，那么该设备的%util = 0.8/1 = 80%，
+                     　　　　所以该参数暗示了设备的繁忙程度
+                     　　　　。一般地，如果该参数是100%表示设备已经接近满负荷运行了
+                     　　　　（当然如果是多磁盘，即使%util是100%，因为磁盘的并发能力，所以磁盘使用未必就到了瓶颈）。
+     *          https://blog.csdn.net/ZYC88888/article/details/79028175
+     *
+     * --net
+     *      1.从进程-端口  ps -ef|grep java          netstat -ntulp |grep 进程号     查看进程开启哪些端口
+     *      2.从端口-进程  netstat -ntulp |grep 端口号    --- ps -ef|grep 进程号  可以查看端口占用情况
+     *      3.lsof -i:端口号  查看端口情况
+     *      4.查看端口是否对外开放  telnet ip 端口号
+     *      5.iptable 防火墙  cat  /etc/sysconfig/iptables  --- https://www.jianshu.com/p/b3068288d80d
+     *
+     *      1.ping
+     *      2.netstat -i
+     *              正常情况下，RX-ERR，RX-DRP，RX-OVR，TX-ERR，TX-DRP，TX-OVR都应该为0，若不为0且很大，那么网络质量肯定有问题，网络传输性能也一定会下降。
+                    当网络传输存在问题时，可以检测网卡设备是否存在故障，还可以检查网络部署环境是否合理。
+
+            netstat -r （default行对应的值表示系统的默认路由）
+     *
+     *
+     *6.从进程信息读取 - 进程号
+     *          root      2328     1  0 18:43 ?        00:00:07 /usr/jdk/jdk1.8.0_112/jre/bin/java -Djava.util.logging.
+     *          config.file=/usr/tomcat/apache-tomcat-8.0.38/conf/logging.properties -Djava.util.logging.manager=
+     *          org.apache.juli.ClassLoaderLogManager -Djdk.tls.ephemeralDHKeySize=2048 -Djava.protocol.handler.pkgs=
+     *          org.apache.catalina.webresources -Djava.rmi.server.hostname=192.168.129.128 -Dcom.sun.management.jmxremote
+     *          -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.ssl=false
+     *          -Dcom.sun.management.jmxremote.authenticate=true -Djava.endorsed.dirs=/usr/tomcat/apache-tomcat-8.0.38/
+     *          endorsed -classpath /usr/tomcat/apache-tomcat-8.0.38/bin/bootstrap.jar:/usr/tomcat/apache-tomcat-8.0.38
+     *          /bin/tomcat-juli.jar -Dcatalina.base=/usr/tomcat/apache-tomcat-8.0.38 -Dcatalina.home=/usr/tomca
+     *          t/apache-tomcat-8.0.38 -Djava.io.tmpdir=/usr/tomcat/apache-tomcat-8.0.38/temp org.apache.catalina.st
+     *          artup.Bootstrap start
+
+     *      1.启动时间
+     *           UID PID PPID C(处理器利用率（废弃率) 进程启动时间 TTY TIME（累积CPU时间） CMD
+     *      2.配置信息
+     *          使用jdk  - tomcat 启动参数配置 比如这里配置了远程连接Djava.rmi.server.hostname=192.168.129.128:9999等
+     *
+     * --------------------------以上信息已经从系统层面得到数据，接下来对该进程进行 ，使用java工具 -----------------
+     *
+     * 7.PerformTool.java
+     *
+
+     *
+     *
+     */
+
+
+//}
+
+
+package com.boot.fast;
+
+
+import com.google.common.collect.Maps;
+import org.assertj.core.util.Lists;
+
+import java.util.*;
+import java.util.concurrent.*;
+
+/**
+ * .pic\fast1.png 图示
+ * 1.批量处理请求 list ==> 时间窗口/尺寸窗口 = blockQueue(mq底层) + schedual Thread + future
+ *      1.list和queue:ArrayList is random access. You can insert and remove elements anywhere within the list. Yes, you can use this as a FIFO data structure, but it does not strictly enforce this behavior. If you want strict FIFO, then use Queue instead.
+ *      2.schedual Thread 实现定时轮训的作用 取代 while(true)..sleep...
+ * 2.代码最终没有测试，思想在这
+ */
+
+public class fast1 /*implements InitializingBean*/ {
+
+
+    private LinkedBlockingDeque<Request> batchRequest = new LinkedBlockingDeque<>();
+
+    /**
+     * 为了测试不引入spring，所以这样代替inittalzinBean
+     */
+    {
+        try {
+            afterPropertiesSet();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public Map<String , Object> queryOrderInfo(String orderNum){
+
+        /**
+         * 3.通过批量处理请求
+         *      1.封装请求对象
+         *      2.放到queue中等待轮训，实现窗口
+         *      3.定时调度
+         */
+        Request request = new Request(UUID.randomUUID().toString(), orderNum, new CompletableFuture<Map<String, Object>>());
+
+        batchRequest.add(request);
+
+
+        return new OrderRemoteCall().queryOrderInfo(orderNum);
+    }
+
+    /**
+     * 构建定时器
+     * @throws Exception
+     */
+//    @Override
+    public void afterPropertiesSet() throws Exception {
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        scheduledExecutorService.schedule(() -> {
+
+            if(batchRequest.size() == 0) return;
+
+//            List<Map<String , Object>> batch = new ArrayList<>();
+            List<Request> batch = new ArrayList<>();
+            for (int i = 0; i < batchRequest.size(); i++) {
+                Request request = batchRequest.poll();
+                /**
+                 * 4.转换通信级别对象，这里直接简化由对象到map - 其他方式
+                 */
+//                batch.add(JSON.parseObject(request.toString().getBytes(),Map.class));
+                batch.add(request);
+            }
+
+            List<Map<String, Object>> responses = new OrderRemoteCall().batchQueryOrderInfo(batch);
+            /**
+             * 6.通信级别判断；方法封装
+             */
+//            batch.stream().map(request -> {
+//                responses.stream().filter().map(() -> {
+//                    Map<String, Object> stringObjectMap = responses.get(request.serialNo);
+//                })
+//            })
+            for (Request re : batch) {
+                for (Map result : responses) {
+                    if(result.get("serialNo").equals(re.serialNo)){
+                        re.completableFuture.complete(result);
+                    }
+                }
+            }
+
+
+        },10, TimeUnit.SECONDS);
+
+
+    }
+
+
+    class Request{
+        private String serialNo;
+        private String orderNum;
+        private CompletableFuture completableFuture;
+
+        public Request(String serialNo, String orderNum, CompletableFuture<Map<String, Object>> completableFuture){
+            serialNo = serialNo;
+            orderNum = orderNum;
+            completableFuture = completableFuture;
+        }
+    }
+
+
+
+
+    /**
+     * 1.内部类的使用和扩展，这里只是模拟，但一会添加线程东西时，内部类是有必要的。
+     */
+     class OrderRemoteCall{
+
+        public  Map<String , Object> queryOrderInfo(String orderNum){
+            HashMap<String, Object> orderInfo = Maps.newHashMap();
+            orderInfo.put("orderNum",orderNum);
+            orderInfo.put("orderInfo","orderInfo");
+            return orderInfo;
+        }
+
+        public  List<Map<String , Object>> batchQueryOrderInfo(List<Request> request){
+            /**
+             * 5.指定初始化大小
+             */
+            List response = Lists.newArrayList(request.size());
+            for (Request requestInfo: request) {
+                response.add( fast1.this.queryOrderInfo(requestInfo.orderNum));
+            }
+            return response;
+        }
+    }
+
+}
+
+
+
+
+package com.boot.fast;
+
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+
+public class fast1Test {
+
+    static private CountDownLatch countDownLatch = new CountDownLatch(100);
+
+    public static void main(String[] args) {
+        fast1 fast1 = new fast1();
+
+        /**
+         * 2.模拟多线程压测 vs jmeter(http请求)
+         *      1.这里的for或者stream都是 伪压测  ==> 使用countdownLotch来实现真正的同时到达
+         */
+        for (int i = 0; i < 100; i++) {
+            new Thread(() -> {
+
+                /**
+                 * 实现真真的同时到达
+                 */
+                countDownLatch.countDown();
+                try {
+                    countDownLatch.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                Map<String, Object> stringObjectMap = fast1.queryOrderInfo("1");
+                System.out.println("thread name "+Thread.currentThread().getName() + ", result is "+stringObjectMap);
+
+            }).start();
+        }
+
+        System.out.println("main end");
+    }
+}
+
