@@ -12,17 +12,58 @@
 =============== meta ===============
 
 1.SQL  : https://sqlflow.gudusoft.com/#/
-2.Spring
-3.
+0.cache  @Cache 、 @InputConctrl
+          聚合 注解 、反射、委派、缓存设计
 
+          --------------
+SpringBoot 项目打成jar包供第三方引用自动配置(Spring发现)解决方案: https://www.1024sou.com/article/246626.html
+所有得抽象都可以使用对应得底层实现，而底层实现之间可以元组合。定制化开发
+  Mybatis 扫描依赖包中的mapper： https://blog.csdn.net/maple_son/article/details/105659367
 
 todo:面试常见问题：关于缓存更新机制，先更新数据库再删除缓存，还是先删除缓存再更新数据库？https://www.toutiao.com/w/1727463020505099/?log_from=3967be08d78f7_1672628686045
 
 
-============== 整理 ==================
+
+1.SQL   sqltip 、initSql
+          表设计 、sql合理性、索引
+2.fastjson、slf4j、mybatis、Spring、jdbcTemplate
+3.算法、工业级解决思路
+    1.防腐层设计 ： openapi防腐，入参、出参对第三方影响，进来，出去都要转换，不直接暴露对用字段
+                   参数校验：https://juejin.cn/post/6844903902811275278
+    2.重构、耦合、影响性、重构逻辑
+
+
+
+============== todo ==============
+1.classLoader
+2.抽象级别不够、合理性、蹩脚
+3.时间数据库类型、代码类型、openapi类型  == 转换
+4.统计表设计、维度、关联与复杂度
+5.导出框架、异步、映射到excel
+6.跳转、穿透问题
+7.默认值设计
+8.Base64编码（怎么使用？）
+（把一串二进制转换成另一种二进制串，以至于可以打印成英文、数字字符还有+、/）
+    1、Base64要求把每三个8Bit的字节转换为四个6Bit的字节（38 = 46 = 24），然后把6Bit再添两位高位0，组成四个8Bit的字节，也就是说，转换后的字符串理论上将要比原来的长1/3。
+
+    2、在email传输中，加密是肯定的，但是base64加密的目的不是让用户发送非常安全的Email。这种加密方式主要就是“防君子不防小人”，达到一种一眼看上去看不出内容的效果。
+
+    3、base64编码是用来解决把不可打印的内容塞进可打印内容的需求的。比如把图片存到数据库，图片数据归根到底还是一堆二进制串（总不能把这些二进制串直接存到数据库吧），用base64编码后的显示成的字符串就大大缩小的长度，可以存到数据库。
+
+    4、满足电子邮件中不能直接使用非ASCII码字符传输数据的规定，所以使用base64进行编码后传输，因为base64的64个字符肯定有对应的ascii编码。
+
+    5、请不要再叫base64加密，请叫base64编码
+
+9.jwt:https://www.jianshu.com/p/576dbf44b2ae
+      https://blog.csdn.net/nsx_truth/article/details/108931313
+10.MySQL执行计划解析: https://developer.aliyun.com/article/602513
+11.二进制位，标识判断 ， 二进制 快速性
+
+
+============== 整理 ===============
 
 分层
-    基石
+    基石  maven结构管理：https://www.toutiao.com/article/7081487918853816868/?
     1.
     <!--项目依赖组织-->
         <resources>
@@ -48,6 +89,9 @@ todo:面试常见问题：关于缓存更新机制，先更新数据库再删除
           </resource>
         </resources>
 
+
+2.jar包依赖：https://blog.csdn.net/ljw499356212/article/details/116657117  。项目层级划分
+  lovelay插件使用：https://blog.csdn.net/qq_24874939/article/details/84534854
 
 
 

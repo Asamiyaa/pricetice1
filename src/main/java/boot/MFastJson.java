@@ -16,6 +16,11 @@ import java.util.List;
 
 /**
  * Created by yangwenjun on 2022/10/19 16:47
+ * todo:
+ *      1.自定义反序列化：https://wujiazhen2.github.io/2018/10/27/fastjson%E4%BD%BF%E7%94%A8%E7%BB%8F%E9%AA%8C/
+ *      2.Feature特性：  https://blog.csdn.net/weixin_43430036/article/details/88687840
+ *      3.API ParseProcess 用map接受json入参 ： https://www.w3cschool.cn/fastjson/fastjson-parseprocess.html
+ *      4.从fastjson多层泛型嵌套解析，看jdk泛型推断：https://www.shuzhiduo.com/A/B0zqV8QGJv/
  */
 public class MFastJson {
 

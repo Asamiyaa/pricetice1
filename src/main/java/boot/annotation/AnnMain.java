@@ -23,6 +23,7 @@ import org.aspectj.lang.Signature;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -292,6 +293,7 @@ interface ITest{
 @RestController
 @RequestMapping("/spring")
 class SpringTestController {
+
 
   @GetMapping("/annotation")
   @SpringTest

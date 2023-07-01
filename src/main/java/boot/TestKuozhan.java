@@ -46,7 +46,7 @@ import org.springframework.test.context.junit4.SpringRunner;
 /**
  * Created by yangwenjun on 2022/11/1 11:15
  */
-@Component
+//@Component
  class TestKuozhan1 implements ApplicationContextAware , BeanFactoryAware {
 /**
  * 如何从spring扩展中获取数据
@@ -489,7 +489,8 @@ class Rule {
  *      2.模板引擎动态管理表、schema、不同数据库，引入判断
  *      3.从配置文件 - sql工厂 - 获取执行   / selector 不同数据库
  */
-@Component
+//@Component
+@Order(97)
 class M implements ApplicationRunner{
     private static String className   	= "org.h2.Driver";
     private static String url         			= "jdbc:h2:mem:dbtest";

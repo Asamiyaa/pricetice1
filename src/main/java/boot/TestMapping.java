@@ -129,6 +129,45 @@ interface SourceMapper{
 
 }
 
+/**
+ * 此接口也是Spring 3.0新增，用于统一化 底层类型转换实现的差异，对外提供统一服务，所以它也被称作类型转换的门面接口，从接口名称xxxService也能看出来其设计思路。它主要有两大实现：
+ *
+ * GenericConversionService：提供模版实现，如转换器的注册、删除、匹配查找等，但并不内置转换器实现
+ * DefaultConversionService：继承自GenericConversionService。在它基础上默认注册了非常多的内建的转换器实现，从而能够实现绝大部分的类型转换需求
+ * ConversionService转换服务它贯穿于Spring上下文ApplicationContext的多项功能，包括但不限于：BeanWrapper处理Bean属性、DataBinder数据绑定、PropertySource外部化属性处理等等。因此想要进一步深入了解的话，ConversionService是你绕不过去的坎。
+ *
+ * void setValue(Object value)：设置属性值
+ * Object getValue()：获取属性值
+ * String getAsText()：输出。把属性值转换成String输出
+ * void setAsText(String text)：输入。将String转换为属性值类型输入
+ *
+ * xxxRegistry用于管理（注册、修改、删除、- 查找）一类组件，当组件类型较多时使用注册中心统一管理是一种非常有效的手段。诚然，PropertyEditor就属于这种场景，管理它们的注册中心是PropertyEditorRegistry。
+ *
+ *
+ * @FunctionalInterface
+ * public interface Converter<S, T> {
+ * 	T convert(S source);
+ * }
+ *
+ * final class StringToNumberConverterFactory implements ConverterFactory<String, Number> {
+ *
+ *    @Override
+ *  public <T extends Number> Converter<String, T> getConverter(Class<T> targetType) {
+ * 		return new StringToNumber<T>(targetType);
+ *  }
+ *
+ *
+ * 	System.out.println(converterFactory.getConverter(Integer.class).convert("1").getClass());
+ *
+ * 相较于前两个，这是最灵活的SPI转换器接口，但也是最复杂的。
+ *
+ *
+ *
+ * StreamConverter
+ *
+ *
+ * 因为有了ConversionService提供的强大能力，我们就可以在基于Spring/Spring Boot做二次开发时使用它，提高系统的通用性和容错性。
+ */
 
 
 

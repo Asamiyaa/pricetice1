@@ -168,6 +168,14 @@ public class TestPick {
     System.out.println(value3);
 
 
+    //T
+    Expression expression7 = parser.parseExpression("T(boot.Constant1).test");
+    System.out.println("T is "+expression7.getValue());
+
+    Expression expression8 = parser.parseExpression("T(boot.Constant1).test1()");
+    System.out.println("TTTT is "+expression8.getValue());
+
+
   }
 
   @Data
@@ -206,3 +214,5 @@ class TestSpringEl{
 
 
 }
+
+

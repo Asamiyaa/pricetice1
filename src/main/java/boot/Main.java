@@ -1,8 +1,11 @@
 package boot;
 
 import com.alibaba.fastjson.JSON;
+import com.google.common.collect.Lists;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -126,14 +129,23 @@ public class Main {
 //      BeanUtils.copyProperties(main,main2);
 //      System.out.println(JSON.toJSONString(main2));
 
-    Inner1 inner1 = new Inner1();
-    inner1.setA("a");
-
-    Inner2 inner2 = new Inner2();
-    BeanUtils.copyProperties(inner1, inner2);
-    System.out.println(JSON.toJSONString(inner2));
+//    Inner1 inner1 = new Inner1();
+//    inner1.setA("a");
+//
+//    Inner2 inner2 = new Inner2();
+//    BeanUtils.copyProperties(inner1, inner2);
+//    System.out.println(JSON.toJSONString(inner2));
 
 //      System.out.println("2".equals(null));
+
+
+    A a = new A();
+    a.setFilePath("1");
+    a.setFilepath(null);
+
+    Map<String, String> collect = Lists.newArrayList(a).stream()
+        .collect(Collectors.toMap(A::getFilePath, A::getFilepath));
+    System.out.println(collect);
 
   }
 

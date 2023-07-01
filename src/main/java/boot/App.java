@@ -1,5 +1,6 @@
 package boot;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -7,7 +8,7 @@ import org.springframework.context.annotation.PropertySource;
 import org.springframework.retry.annotation.EnableRetry;
 
 //@SpringBootApplication(scanBasePackages = {"hello","load","invoice","jwt","redis","component"})
-@SpringBootApplication(scanBasePackages = {"component","boot","Common","hello","load","redis","shell","utils"})
+@SpringBootApplication(scanBasePackages = {"component","boot","Common","hello","load","redis","shell","utils","cache","SQL"})
 //@EnableJpaRepositories(basePackages = "invoice")
 @EntityScan(basePackages = "invoice")
 //@PropertySource({"classpath:testDQ.properties"/*,"classpath:config/config.properties"*/})
@@ -20,13 +21,23 @@ public class App {
 //是因为启动的时候还不能读取到吗？
 //  @Value("${test.a}")
 //  String testDQ;
-  public static void  main(String[]args){
+  @Autowired
+  testTransationNew testTransationNew;
+  public static void  main(String[]args) throws InterruptedException {
     SpringApplication.run(App.class,args);
 
     //验证能否读取resources下面不是application命名的properties
 //    new App().tt();
+
+
+    Thread.sleep(1000);
+
+
   }
 //  private void tt(){
 //    System.out.println(testDQ);   //null
 //  }
+
+
+
 }
