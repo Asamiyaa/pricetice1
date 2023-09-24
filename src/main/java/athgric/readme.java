@@ -1,5 +1,10 @@
 package athgric;
 
+import com.google.common.collect.Maps;
+import java.sql.Date;
+import java.util.HashMap;
+import org.apache.commons.collections4.MapUtils;
+
 /**
  * Created by yangwenjun on 2023/6/29 16:12
  *
@@ -13,5 +18,16 @@ package athgric;
  *
  */
 public class readme {
+
+  public static void main(String[] args) {
+    HashMap<Object, Object> objectObjectHashMap = Maps.newHashMap();
+    System.out.println(objectObjectHashMap.get(null));
+
+
+//    Date date = new Date();                 任
+    System.out.println("江苏省苏力环境科技有限责仼公司".equals("江苏省苏力环境科技有限责任公司"));
+
+  }
+
 
 }
